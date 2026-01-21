@@ -1,0 +1,14 @@
+package com.holytrinity.expenso;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+
+@SpringBootApplication
+public class ExpensoApplication {
+
+    public static void main(final String[] args) {
+        SpringApplication.run(ExpensoApplication.class, args);
+    }
+
+}
