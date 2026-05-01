@@ -24,10 +24,7 @@ public class UserController {
     private final UserUseCase userUseCase;
     private final com.holytrinity.expenso.security.UserContext userContext;
 
-    @GetMapping
-    public ResponseEntity<List<UserDTO>> getAllUsers() {
-        return ResponseEntity.ok(userUseCase.findAllUsers());
-    }
+
 
     @GetMapping("/me")
     public ResponseEntity<UserDTO> getUser() {
@@ -42,8 +39,8 @@ public class UserController {
 
     @DeleteMapping("/sync")
     @ApiResponse(responseCode = "204")
-    public ResponseEntity<Void> deleteSyncUsers(@RequestBody final List<String> clientReferenceIds) {
-        userUseCase.deleteBulk(clientReferenceIds);
+    public ResponseEntity<Void> deleteSyncUsers(@RequestBody final List<String> userIds) {
+        userUseCase.deleteBulk(userIds);
         return ResponseEntity.noContent().build();
     }
 }

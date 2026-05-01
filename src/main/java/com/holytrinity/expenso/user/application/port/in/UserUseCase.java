@@ -14,5 +14,7 @@ public interface UserUseCase {
 
     List<UserDTO> syncBulk(List<UserDTO> userDTOs);
 
+    UserDTO createUserForRegistration(UserDTO userDTO);
+
     void deleteBulk(List<String> userIds);
 }

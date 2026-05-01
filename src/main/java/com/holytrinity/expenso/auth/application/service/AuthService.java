@@ -28,7 +28,7 @@ public class AuthService {
         request.setPasswordHash(passwordEncoder.encode(request.getPasswordHash())); // Using passwordHash field for
                                                                                     // password
         request.setAuthProviders(Collections.singletonList("LOCAL"));
-        userUseCase.syncBulk(Collections.singletonList(request));
+        userUseCase.createUserForRegistration(request);
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(request.getEmail());
         String jwtToken = jwtUtils.generateToken(userDetails);

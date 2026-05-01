@@ -29,6 +29,7 @@ public class UserDTO {
     private List<@Size(max = 255) String> authProviders;
 
     @Size(max = 255)
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String passwordHash;
 
     @NotNull

@@ -34,6 +34,9 @@ public class AssociatedUserApplicationService implements AssociatedUserUseCase {
         return dtos.stream().map(dto -> {
             Optional<AssociatedUser> existing = associatedUserPort
                     .loadAssociatedUser(dto.getAssociatedUserId());
+            if (existing.isPresent()) {
+                checkOwnership(existing.get());
+            }
             AssociatedUser entity = existing.orElseGet(AssociatedUser::new);
             mapToEntity(dto, entity);
             entity.setUser(currentUser);
@@ -51,6 +54,7 @@ public class AssociatedUserApplicationService implements AssociatedUserUseCase {
     public void deleteBulk(List<String> associatedUserIds) {
         associatedUserIds.forEach(id -> {
             associatedUserPort.loadAssociatedUser(id).ifPresent(entity -> {
+                checkOwnership(entity);
                 associatedUserPort.deleteAssociatedUser(entity);
             });
         });
@@ -80,6 +84,13 @@ public class AssociatedUserApplicationService implements AssociatedUserUseCase {
         entity.setEmail(dto.getEmail());
         if (dto.getVersion() != null) {
             entity.setVersion(dto.getVersion());
+        }
+    }
+
+    private void checkOwnership(AssociatedUser entity) {
+        String currentUserId = userContext.getCurrentUserId();
+        if (entity.getUser() != null && !entity.getUser().getUserId().equals(currentUserId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Cannot modify an associated user that does not belong to you");
         }
     }
 }

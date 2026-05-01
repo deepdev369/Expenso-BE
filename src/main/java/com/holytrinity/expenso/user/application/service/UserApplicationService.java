@@ -22,6 +22,7 @@ public class UserApplicationService implements UserUseCase {
 
     private final UserPort userPort;
     private final ApplicationEventPublisher publisher;
+    private final com.holytrinity.expenso.security.UserContext userContext;
 
     @Override
     @Transactional(readOnly = true)
@@ -45,6 +46,12 @@ public class UserApplicationService implements UserUseCase {
         return userPort.loadUserByEmail(email)
                 .map(this::mapToDTO)
                 .orElseThrow(NotFoundException::new);
+    }
+
+    @Override
+    @Transactional
+    public UserDTO createUserForRegistration(UserDTO userDTO) {
+        return createUser(userDTO);
     }
 
     private UserDTO createUser(UserDTO userDTO) {
@@ -75,7 +82,11 @@ public class UserApplicationService implements UserUseCase {
     @Transactional
     public List<UserDTO> syncBulk(List<UserDTO> userDTOs) {
         log.info("Processing bulk users: {} items", userDTOs.size());
+        String currentUserId = userContext.getCurrentUserId();
         return userDTOs.stream().map(dto -> {
+            if (dto.getUserId() != null && !dto.getUserId().equals(currentUserId)) {
+                throw new org.springframework.security.access.AccessDeniedException("Cannot sync other users");
+            }
             java.util.Optional<User> existing = userPort.loadUser(dto.getUserId());
             if (existing.isEmpty()) {
                 return createUser(dto);
@@ -91,7 +102,11 @@ public class UserApplicationService implements UserUseCase {
     @Transactional
     public void deleteBulk(List<String> userIds) {
         log.info("Processing bulk user delete for {} items", userIds.size());
+        String currentUserId = userContext.getCurrentUserId();
         userIds.forEach(id -> {
+            if (!id.equals(currentUserId)) {
+                throw new org.springframework.security.access.AccessDeniedException("Cannot delete other users");
+            }
             userPort.loadUser(id).ifPresent(user -> {
                 deleteUser(user.getUserId());
             });
