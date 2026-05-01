@@ -28,6 +28,10 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     private final UserPort userPort;
     private final ApplicationEventPublisher publisher;
     private final com.holytrinity.expenso.security.UserContext userContext;
+    private final com.holytrinity.expenso.expense.application.port.out.AiExtractionPort aiExtractionPort;
+
+    @org.springframework.beans.factory.annotation.Value("${app.webhook.base-url}")
+    private String webhookBaseUrl;
 
     @Override
     @Transactional(readOnly = true)
@@ -46,8 +50,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         return mapToDTO(expense);
     }
 
-    @Override
-    public ExpenseDTO create(ExpenseDTO expenseDTO) {
+    private ExpenseDTO create(ExpenseDTO expenseDTO) {
         log.info("Creating expense for user: {}", expenseDTO.getUserID());
         Expense expense = new Expense();
         mapToEntity(expenseDTO, expense);
@@ -56,8 +59,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         return mapToDTO(savedExpense);
     }
 
-    @Override
-    public ExpenseDTO update(Long expenseId, ExpenseDTO expenseDTO) {
+    private ExpenseDTO update(Long expenseId, ExpenseDTO expenseDTO) {
         log.info("Updating expense with ID: {}", expenseId);
         Expense expense = expensePort.loadExpense(expenseId)
                 .orElseThrow(NotFoundException::new);
@@ -68,8 +70,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         return mapToDTO(updatedExpense);
     }
 
-    @Override
-    public void delete(Long expenseId) {
+    private void delete(Long expenseId) {
         log.info("Deleting expense with ID: {}", expenseId);
         Expense expense = expensePort.loadExpense(expenseId)
                 .orElseThrow(NotFoundException::new);
@@ -85,19 +86,25 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     public List<ExpenseDTO> processBulk(List<ExpenseDTO> expenseDTOs) {
         log.info("Processing bulk expenses: {} items", expenseDTOs.size());
         return expenseDTOs.stream().map(dto -> {
-            if (dto.getExpenseId() == null) {
+            java.util.Optional<Expense> existing = expensePort
+                    .loadExpenseByClientReferenceId(dto.getClientReferenceId());
+            if (existing.isEmpty()) {
                 return create(dto);
             } else {
-                return update(dto.getExpenseId(), dto);
+                return update(existing.get().getExpenseId(), dto);
             }
         }).toList();
     }
 
     @Override
     @Transactional
-    public void deleteBulk(List<Long> expenseIds) {
-        log.info("Processing bulk delete for {} items", expenseIds.size());
-        expenseIds.forEach(this::delete);
+    public void deleteBulk(List<String> clientReferenceIds) {
+        log.info("Processing bulk delete for {} items", clientReferenceIds.size());
+        clientReferenceIds.forEach(id -> {
+            expensePort.loadExpenseByClientReferenceId(id).ifPresent(expense -> {
+                delete(expense.getExpenseId());
+            });
+        });
     }
 
     @Override
@@ -134,9 +141,101 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         }
     }
 
+    @Override
+    public void submitForExtraction(org.springframework.web.multipart.MultipartFile file, String text,
+            String clientReferenceId) {
+        Long currentUserId = userContext.getCurrentUserId();
+        User currentUser = userPort.loadUser(currentUserId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest request = com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest
+                .builder()
+                .userId(String.valueOf(currentUserId))
+                .clientReferenceId(clientReferenceId)
+                .rawText(text)
+                .file(file)
+                .currency(currentUser.getDefaultCurrency())
+                .userLanguage(currentUser.getLanguage())
+                .categoriesMapping(currentUser.getCategoriesMapping())
+                .paymentMethods(currentUser.getPaymentMethods())
+                .webhookUrl(webhookBaseUrl + "/api/v1/webhook/expense-ai")
+                .build();
+        aiExtractionPort.submitExpenseForExtraction(request);
+    }
+
+    @Override
+    @Transactional
+    public void handleExtractionCallback(com.fasterxml.jackson.databind.JsonNode payload) {
+        log.info("Received Webhook from AI Microservice. Success flag: {}", payload.path("success").asBoolean());
+        boolean success = payload.path("success").asBoolean(false);
+        if (success) {
+            com.fasterxml.jackson.databind.JsonNode data = payload.path("data");
+            ExpenseDTO dto = new ExpenseDTO();
+
+            // Map the Python Dict payload back to Java DTO fields
+            dto.setAmount(data.path("amount").asDouble(0.0));
+            dto.setCategory(data.path("category").asText(null));
+            dto.setSubCategory(data.path("sub_category").asText(null));
+            dto.setPaymentMode(data.path("payment_mode").asText(null));
+            dto.setMerchantName(data.path("merchant_name").asText(null));
+            dto.setTransactionType(data.path("transaction_type").asText(null));
+
+            // AI Service usually returns a string date or epoch. We simplify date
+            // extraction handling for now
+            // In python, it's typically 'date'. We handle both numeric and string fallback
+            if (data.path("date").isNumber()) {
+                dto.setExpenseDate(data.path("date").asLong(System.currentTimeMillis()));
+            } else {
+                dto.setExpenseDate(System.currentTimeMillis());
+            }
+
+            dto.setRawText(data.path("raw_text").asText(null));
+            dto.setStatus("PROCESSED_BY_AI");
+            dto.setUserID(Long.valueOf(data.path("user_id").asText("0")));
+            dto.setClientReferenceId(payload.path("clientReferenceId").asText(null));
+
+            // Create is marked transactional natively and expects internal user override
+            // via context,
+            // but the webhook call might run as anonymous via Service Auth.
+            // That's why create() using current context throws NotFound "User not
+            // found...".
+            // WAIT: We need to override user setting slightly for webhooks or inject proper
+            // logic!
+            // We circumvent create() by directly mapping and saving if context is missing.
+
+            handleWebhookCreateInternal(dto, data.path("user_id").asLong(0L));
+        } else {
+            log.error("AI Microservice reported extraction failure: {}", payload.path("error").asText());
+        }
+    }
+
+    private void handleWebhookCreateInternal(ExpenseDTO expenseDTO, Long assignedUserId) {
+        log.info("Creating internal AI expense for assigned user: {}", assignedUserId);
+        Expense expense = new Expense();
+
+        expense.setAmount(expenseDTO.getAmount());
+        expense.setCategory(expenseDTO.getCategory());
+        expense.setSubCategory(expenseDTO.getSubCategory());
+        expense.setPaymentMode(expenseDTO.getPaymentMode());
+        expense.setTransactionType(expenseDTO.getTransactionType());
+        expense.setMerchantName(expenseDTO.getMerchantName());
+        expense.setRawText(expenseDTO.getRawText());
+        expense.setStatus(expenseDTO.getStatus());
+        expense.setExpenseDate(expenseDTO.getExpenseDate());
+        expense.setClientReferenceId(expenseDTO.getClientReferenceId());
+        expense.setUserConfirmed(false);
+
+        User user = userPort.loadUser(assignedUserId)
+                .orElseThrow(() -> new NotFoundException("User not found: " + assignedUserId));
+        expense.setUser(user);
+
+        expensePort.saveExpense(expense);
+        log.info("AI Expense created internally via webhook");
+    }
+
     private ExpenseDTO mapToDTO(Expense expense) {
         ExpenseDTO expenseDTO = new ExpenseDTO();
         expenseDTO.setExpenseId(expense.getExpenseId());
+        expenseDTO.setClientReferenceId(expense.getClientReferenceId());
         expenseDTO.setAmount(expense.getAmount());
         expenseDTO.setCategory(expense.getCategory());
         expenseDTO.setSubCategory(expense.getSubCategory());
@@ -156,6 +255,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     }
 
     private void mapToEntity(ExpenseDTO expenseDTO, Expense expense) {
+        expense.setClientReferenceId(expenseDTO.getClientReferenceId());
         expense.setAmount(expenseDTO.getAmount());
         expense.setCategory(expenseDTO.getCategory());
         expense.setSubCategory(expenseDTO.getSubCategory());

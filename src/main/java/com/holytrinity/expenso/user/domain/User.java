@@ -21,15 +21,22 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @Table(name = "\"user\"")
 @EntityListeners(AuditingEntityListener.class)
+@org.hibernate.annotations.SQLRestriction("deleted = false")
 @Getter
 @Setter
 public class User {
+
+        @Column(nullable = false)
+        private Boolean deleted = false;
 
         @Id
         @Column(nullable = false, updatable = false)
         @SequenceGenerator(name = "primary_sequence", sequenceName = "primary_sequence", allocationSize = 1, initialValue = 10000)
         @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "primary_sequence")
         private Long userId;
+
+        @Column(nullable = false, unique = true, updatable = false)
+        private String clientReferenceId;
 
         @Column(nullable = false, unique = true)
         private String email;
@@ -55,6 +62,14 @@ public class User {
 
         @Column(nullable = false)
         private String language;
+
+        @Column(columnDefinition = "jsonb")
+        @JdbcTypeCode(SqlTypes.JSON)
+        private java.util.Map<String, java.util.List<String>> categoriesMapping;
+
+        @Column(columnDefinition = "jsonb")
+        @JdbcTypeCode(SqlTypes.JSON)
+        private java.util.List<String> paymentMethods;
 
         @Column(nullable = false)
         private Boolean smsConsentGranted;

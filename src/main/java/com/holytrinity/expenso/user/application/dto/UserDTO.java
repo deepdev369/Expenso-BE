@@ -16,6 +16,10 @@ public class UserDTO {
 
     @NotNull
     @Size(max = 255)
+    private String clientReferenceId;
+
+    @NotNull
+    @Size(max = 255)
     @UserEmailUnique
     private String email;
 
@@ -41,6 +45,10 @@ public class UserDTO {
     @NotNull
     @Size(max = 255)
     private String language;
+
+    private java.util.Map<String, java.util.List<String>> categoriesMapping;
+
+    private java.util.List<String> paymentMethods;
 
     @NotNull
     private Boolean smsConsentGranted;

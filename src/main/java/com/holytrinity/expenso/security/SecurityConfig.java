@@ -25,17 +25,20 @@ public class SecurityConfig {
     private final CustomUserDetailsService userDetailsService;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
     private final com.holytrinity.expenso.shared.idempotency.IdempotencyFilter idempotencyFilter;
+    private final InternalTokenFilter internalTokenFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(req -> req
-                        .requestMatchers("/api/auth/**", "/login/**", "/swagger-ui/**", "/v3/api-docs/**", "/error")
+                        .requestMatchers("/api/auth/**", "/login/**", "/swagger-ui/**", "/v3/api-docs/**", "/error",
+                                "/api/v1/webhook/**")
                         .permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
+                .addFilterBefore(internalTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterAfter(idempotencyFilter, JwtAuthenticationFilter.class)
                 .oauth2Login(oauth2 -> oauth2

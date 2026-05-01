@@ -18,6 +18,11 @@ public class UserPersistenceAdapter implements UserPort {
     }
 
     @Override
+    public Optional<User> loadUserByClientReferenceId(String clientReferenceId) {
+        return userRepository.findByClientReferenceId(clientReferenceId);
+    }
+
+    @Override
     public java.util.List<User> loadAllUsers() {
         return userRepository.findAll();
     }

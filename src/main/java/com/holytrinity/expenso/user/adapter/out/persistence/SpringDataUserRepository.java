@@ -8,4 +8,6 @@ public interface SpringDataUserRepository extends JpaRepository<User, Long> {
     boolean existsByEmailIgnoreCase(String email);
 
     Optional<User> findByEmail(String email);
+
+    Optional<User> findByClientReferenceId(String clientReferenceId);
 }

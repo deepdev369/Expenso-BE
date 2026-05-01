@@ -7,6 +7,8 @@ import java.util.Optional;
 public interface UserPort {
     Optional<User> loadUser(Long userId);
 
+    Optional<User> loadUserByClientReferenceId(String clientReferenceId);
+
     List<User> loadAllUsers();
 
     boolean existsByEmail(String email);

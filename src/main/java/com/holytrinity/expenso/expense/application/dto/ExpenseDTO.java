@@ -15,6 +15,10 @@ public class ExpenseDTO {
     private Long version;
 
     @NotNull
+    @Size(max = 255)
+    private String clientReferenceId;
+
+    @NotNull
     private Double amount;
 
     @NotNull

@@ -36,6 +36,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         // Check if user exists, if not create
         if (!userPort.existsByEmail(email)) {
             UserDTO newUser = new UserDTO();
+            newUser.setClientReferenceId(java.util.UUID.randomUUID().toString());
             newUser.setEmail(email);
             newUser.setUserName(name);
             newUser.setEmailVerified(true); // Assumed verified from OAuth
@@ -44,7 +45,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             newUser.setLanguage("en"); // Default
             newUser.setSmsConsentGranted(false);
             newUser.setVoiceConsentGranted(false);
-            userUseCase.createUser(newUser);
+            userUseCase.syncBulk(Collections.singletonList(newUser));
         }
 
         // Generate Token

@@ -5,13 +5,12 @@ import com.holytrinity.expenso.user.application.dto.UserDTO;
 import java.util.List;
 
 public interface UserUseCase {
-    UserDTO createUser(UserDTO userDTO);
 
     UserDTO getUser(Long userId);
 
     List<UserDTO> findAllUsers();
 
-    UserDTO updateUser(Long userId, UserDTO userDTO);
+    List<UserDTO> syncBulk(List<UserDTO> userDTOs);
 
-    void deleteUser(Long userId);
+    void deleteBulk(List<String> clientReferenceIds);
 }

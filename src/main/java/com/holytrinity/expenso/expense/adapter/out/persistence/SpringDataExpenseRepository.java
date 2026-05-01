@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface SpringDataExpenseRepository extends JpaRepository<Expense, Long> {
     Expense findFirstByUserUserId(Long userId);
 
+    java.util.Optional<Expense> findByClientReferenceId(String clientReferenceId);
+
     List<Expense> findAllByUserUserId(Long userId);
 
     List<Expense> findAllByUserEmail(String email);

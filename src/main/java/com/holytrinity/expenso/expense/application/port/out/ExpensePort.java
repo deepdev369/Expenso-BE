@@ -7,6 +7,8 @@ import java.util.Optional;
 public interface ExpensePort {
     Optional<Expense> loadExpense(Long expenseId);
 
+    Optional<Expense> loadExpenseByClientReferenceId(String clientReferenceId);
+
     List<Expense> loadAllExpenses();
 
     Expense findFirstByUserId(Long userId);

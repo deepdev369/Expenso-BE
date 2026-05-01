@@ -19,6 +19,11 @@ public class ExpensePersistenceAdapter implements ExpensePort {
     }
 
     @Override
+    public Optional<Expense> loadExpenseByClientReferenceId(String clientReferenceId) {
+        return expenseRepository.findByClientReferenceId(clientReferenceId);
+    }
+
+    @Override
     public List<Expense> loadAllExpenses() {
         return expenseRepository.findAll();
     }

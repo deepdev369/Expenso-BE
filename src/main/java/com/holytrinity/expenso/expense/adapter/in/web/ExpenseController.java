@@ -6,14 +6,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,69 +34,26 @@ public class ExpenseController {
         return ResponseEntity.ok(expenseUseCase.get(expenseId));
     }
 
-    @PostMapping("/create")
-    @ApiResponse(responseCode = "201")
-    public ResponseEntity<ExpenseDTO> createExpense(@RequestBody @Valid final ExpenseDTO expenseDTO) {
-        final ExpenseDTO createdExpense = expenseUseCase.create(expenseDTO);
-        return new ResponseEntity<>(createdExpense, HttpStatus.CREATED);
-    }
-
-    @PutMapping("/update/{expenseId}")
-    public ResponseEntity<ExpenseDTO> updateExpense(@PathVariable(name = "expenseId") final Long expenseId,
-            @RequestBody @Valid final ExpenseDTO expenseDTO) {
-        final ExpenseDTO updatedExpense = expenseUseCase.update(expenseId, expenseDTO);
-        return ResponseEntity.ok(updatedExpense);
-    }
-
-    @DeleteMapping("/delete/{expenseId}")
-    @ApiResponse(responseCode = "204")
-    public ResponseEntity<Void> deleteExpense(@PathVariable(name = "expenseId") final Long expenseId) {
-        expenseUseCase.delete(expenseId);
-        return ResponseEntity.noContent().build();
-    }
-
-    @PostMapping("/create-bulk")
-    public ResponseEntity<List<ExpenseDTO>> createBulkExpenses(@RequestBody @Valid final List<ExpenseDTO> expenseDTOs) {
-        // Simple heuristic: if ID is null, create. If ID is present, update.
-        // However, standard REST usually separates these or uses PATCH.
-        // User requested "Single bulk API that can Create new... Update existing".
-        // I will split them in the service or just call one method if the controller
-        // receives mixed.
-        // But let's check the UseCase. I added createBulk and updateBulk.
-        // Let's implement a "processBulk" or similar?
-        // Actually, for simplicity and clarity, let's expose specific bulk endpoints or
-        // logic to split them.
-        // User asked: "3.1 Bulk Create & Update... Implement a single bulk API".
-        // So I'll implement `POST /bulk` and delegate to Service to handle both.
-        // But I defined `createBulk` and `updateBulk` in the interface.
-        // I should probably correct the Interface to `processBulk` or handle it in
-        // Controller.
-        // Let's handle it in Controller by splitting the list? No, transactional
-        // boundary should be in Service.
-        // I'll update the Interface to `List<ExpenseDTO> saveBulk(List<ExpenseDTO>
-        // expenses)` or similar.
-        // For now, let's assume I'll call `createBulk` for the ones without ID and
-        // `updateBulk` for ones with ID.
-        // But that breaks transactionality if done in Controller.
-        // So I will change the Plan slightly to add `processBulk` or similar.
-        // Actually, let's just stick to the plan: "Implement a single bulk API...
-        // Create new... Update existing".
-        // I'll assume the Controller receives a list.
-
-        // Refactoring on the fly: I'll use `createBulk` for strictly new, `updateBulk`
-        // for existing.
-        // But the user wants a SINGLE endpoint.
-        // I'll use `POST /bulk` and inside I will pass the whole list to a new method
-        // `saveBulk` in Service.
-        // So I need to update the use case again?
-        // Or I can just call `processBulk` in the controller.
-
+    @PostMapping("/sync")
+    @ApiResponse(responseCode = "200")
+    public ResponseEntity<List<ExpenseDTO>> syncExpenses(@RequestBody @Valid final List<ExpenseDTO> expenseDTOs) {
         return ResponseEntity.ok(expenseUseCase.processBulk(expenseDTOs));
     }
 
-    @DeleteMapping("/delete-bulk")
-    public ResponseEntity<Void> deleteBulkExpenses(@RequestBody final List<Long> expenseIds) {
-        expenseUseCase.deleteBulk(expenseIds);
+    @DeleteMapping("/sync")
+    @ApiResponse(responseCode = "204")
+    public ResponseEntity<Void> deleteSyncExpenses(@RequestBody final List<String> clientReferenceIds) {
+        expenseUseCase.deleteBulk(clientReferenceIds);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ApiResponse(responseCode = "202", description = "Accepted for processing")
+    public ResponseEntity<Void> extractExpense(
+            @org.springframework.web.bind.annotation.RequestParam(value = "file", required = false) org.springframework.web.multipart.MultipartFile file,
+            @org.springframework.web.bind.annotation.RequestParam(value = "text", required = false) String text,
+            @org.springframework.web.bind.annotation.RequestParam(value = "clientReferenceId", required = true) String clientReferenceId) {
+        expenseUseCase.submitForExtraction(file, text, clientReferenceId);
+        return ResponseEntity.accepted().build();
     }
 }

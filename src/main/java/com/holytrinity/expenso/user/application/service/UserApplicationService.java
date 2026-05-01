@@ -39,8 +39,7 @@ public class UserApplicationService implements UserUseCase {
                 .orElseThrow(NotFoundException::new);
     }
 
-    @Override
-    public UserDTO createUser(UserDTO userDTO) {
+    private UserDTO createUser(UserDTO userDTO) {
         log.info("Creating user with email: {}", userDTO.getEmail());
         if (userPort.existsByEmail(userDTO.getEmail())) {
             throw new ResourceAlreadyExistsException("User with email " + userDTO.getEmail() + " already exists");
@@ -52,8 +51,7 @@ public class UserApplicationService implements UserUseCase {
         return mapToDTO(savedUser);
     }
 
-    @Override
-    public UserDTO updateUser(Long userId, UserDTO userDTO) {
+    private UserDTO updateUser(Long userId, UserDTO userDTO) {
         log.info("Updating user with ID: {}", userId);
         User user = userPort.loadUser(userId)
                 .orElseThrow(NotFoundException::new);
@@ -63,8 +61,7 @@ public class UserApplicationService implements UserUseCase {
         return mapToDTO(updatedUser);
     }
 
-    @Override
-    public void deleteUser(Long userId) {
+    private void deleteUser(Long userId) {
         log.info("Deleting user with ID: {}", userId);
         User user = userPort.loadUser(userId)
                 .orElseThrow(NotFoundException::new);
@@ -73,9 +70,35 @@ public class UserApplicationService implements UserUseCase {
         log.info("User deleted: {}", userId);
     }
 
+    @Override
+    @Transactional
+    public List<UserDTO> syncBulk(List<UserDTO> userDTOs) {
+        log.info("Processing bulk users: {} items", userDTOs.size());
+        return userDTOs.stream().map(dto -> {
+            java.util.Optional<User> existing = userPort.loadUserByClientReferenceId(dto.getClientReferenceId());
+            if (existing.isEmpty()) {
+                return createUser(dto);
+            } else {
+                return updateUser(existing.get().getUserId(), dto);
+            }
+        }).toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteBulk(List<String> clientReferenceIds) {
+        log.info("Processing bulk user delete for {} items", clientReferenceIds.size());
+        clientReferenceIds.forEach(id -> {
+            userPort.loadUserByClientReferenceId(id).ifPresent(user -> {
+                deleteUser(user.getUserId());
+            });
+        });
+    }
+
     private UserDTO mapToDTO(User user) {
         UserDTO userDTO = new UserDTO();
         userDTO.setUserId(user.getUserId());
+        userDTO.setClientReferenceId(user.getClientReferenceId());
         userDTO.setEmail(user.getEmail());
         userDTO.setUserName(user.getUserName());
         userDTO.setPhone(user.getPhone());
@@ -84,6 +107,8 @@ public class UserApplicationService implements UserUseCase {
         userDTO.setEmailVerified(user.getEmailVerified());
         userDTO.setDefaultCurrency(user.getDefaultCurrency());
         userDTO.setLanguage(user.getLanguage());
+        userDTO.setCategoriesMapping(user.getCategoriesMapping());
+        userDTO.setPaymentMethods(user.getPaymentMethods());
         userDTO.setSmsConsentGranted(user.getSmsConsentGranted());
         userDTO.setVoiceConsentGranted(user.getVoiceConsentGranted());
         userDTO.setConsentGrantedAt(user.getConsentGrantedAt());
@@ -92,6 +117,7 @@ public class UserApplicationService implements UserUseCase {
     }
 
     private void mapToEntity(UserDTO userDTO, User user) {
+        user.setClientReferenceId(userDTO.getClientReferenceId());
         user.setEmail(userDTO.getEmail());
         user.setUserName(userDTO.getUserName());
         user.setPhone(userDTO.getPhone());
@@ -100,6 +126,8 @@ public class UserApplicationService implements UserUseCase {
         user.setEmailVerified(userDTO.getEmailVerified());
         user.setDefaultCurrency(userDTO.getDefaultCurrency());
         user.setLanguage(userDTO.getLanguage());
+        user.setCategoriesMapping(userDTO.getCategoriesMapping());
+        user.setPaymentMethods(userDTO.getPaymentMethods());
         user.setSmsConsentGranted(userDTO.getSmsConsentGranted());
         user.setVoiceConsentGranted(userDTO.getVoiceConsentGranted());
         user.setConsentGrantedAt(userDTO.getConsentGrantedAt());
