@@ -10,7 +10,7 @@ import java.util.Map;
 @Builder
 public class AiExtractionRequest {
     private String userId;
-    private String clientReferenceId;
+    private String expenseId;
     private String rawText;
     private MultipartFile file;
     private String currency;

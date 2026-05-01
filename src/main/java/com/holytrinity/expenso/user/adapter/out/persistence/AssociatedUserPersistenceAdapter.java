@@ -2,7 +2,6 @@ package com.holytrinity.expenso.user.adapter.out.persistence;
 
 import com.holytrinity.expenso.user.application.port.out.AssociatedUserPort;
 import com.holytrinity.expenso.user.domain.AssociatedUser;
-import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -14,13 +13,14 @@ public class AssociatedUserPersistenceAdapter implements AssociatedUserPort {
     private final SpringDataAssociatedUserRepository repository;
 
     @Override
-    public Optional<AssociatedUser> loadAssociatedUserByClientReferenceId(String clientReferenceId) {
-        return repository.findByClientReferenceId(clientReferenceId);
+    public Optional<AssociatedUser> loadAssociatedUser(String associatedUserId) {
+        return repository.findById(associatedUserId);
     }
 
     @Override
-    public List<AssociatedUser> loadAllByUserId(Long userId) {
-        return repository.findAllByUserUserId(userId);
+    public org.springframework.data.domain.Page<AssociatedUser> loadAll(
+            org.springframework.data.domain.Pageable pageable) {
+        return repository.findAll(pageable);
     }
 
     @Override

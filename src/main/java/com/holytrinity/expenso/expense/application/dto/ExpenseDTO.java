@@ -10,13 +10,9 @@ import lombok.Setter;
 @Setter
 public class ExpenseDTO {
 
-    private Long expenseId;
+    private String expenseId;
 
     private Long version;
-
-    @NotNull
-    @Size(max = 255)
-    private String clientReferenceId;
 
     @NotNull
     private Double amount;
@@ -56,6 +52,7 @@ public class ExpenseDTO {
     private Long expenseDate;
 
     @NotNull
-    private Long userID;
+    @Size(max = 255)
+    private String userID;
 
 }

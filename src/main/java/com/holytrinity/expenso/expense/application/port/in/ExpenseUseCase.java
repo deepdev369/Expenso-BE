@@ -4,7 +4,7 @@ import com.holytrinity.expenso.expense.application.dto.ExpenseDTO;
 import java.util.List;
 
 public interface ExpenseUseCase {
-    ExpenseDTO get(Long expenseId);
+    ExpenseDTO get(String expenseId);
 
     List<ExpenseDTO> findAllByUserEmail(String email);
 
@@ -12,9 +12,9 @@ public interface ExpenseUseCase {
 
     List<ExpenseDTO> processBulk(List<ExpenseDTO> expenseDTOs);
 
-    void deleteBulk(List<String> clientReferenceIds);
+    void deleteBulk(List<String> expenseIds);
 
-    void submitForExtraction(org.springframework.web.multipart.MultipartFile file, String text, String clientReferenceId);
+    void submitForExtraction(org.springframework.web.multipart.MultipartFile file, String text, String expenseId);
 
     void handleExtractionCallback(com.fasterxml.jackson.databind.JsonNode payload);
 

@@ -13,13 +13,8 @@ public class UserPersistenceAdapter implements UserPort {
     private final SpringDataUserRepository userRepository;
 
     @Override
-    public Optional<User> loadUser(Long userId) {
+    public Optional<User> loadUser(String userId) {
         return userRepository.findById(userId);
-    }
-
-    @Override
-    public Optional<User> loadUserByClientReferenceId(String clientReferenceId) {
-        return userRepository.findByClientReferenceId(clientReferenceId);
     }
 
     @Override

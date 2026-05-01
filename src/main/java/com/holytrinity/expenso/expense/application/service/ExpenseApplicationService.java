@@ -36,14 +36,13 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     @Override
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<ExpenseDTO> findAll(org.springframework.data.domain.Pageable pageable) {
-        Long userId = userContext.getCurrentUserId();
-        return expensePort.findAllByUserUserId(userId, pageable)
+        return expensePort.findAll(pageable)
                 .map(this::mapToDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public ExpenseDTO get(Long expenseId) {
+    public ExpenseDTO get(String expenseId) {
         Expense expense = expensePort.loadExpense(expenseId)
                 .orElseThrow(NotFoundException::new);
         checkOwnership(expense);
@@ -59,7 +58,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         return mapToDTO(savedExpense);
     }
 
-    private ExpenseDTO update(Long expenseId, ExpenseDTO expenseDTO) {
+    private ExpenseDTO update(String expenseId, ExpenseDTO expenseDTO) {
         log.info("Updating expense with ID: {}", expenseId);
         Expense expense = expensePort.loadExpense(expenseId)
                 .orElseThrow(NotFoundException::new);
@@ -70,7 +69,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         return mapToDTO(updatedExpense);
     }
 
-    private void delete(Long expenseId) {
+    private void delete(String expenseId) {
         log.info("Deleting expense with ID: {}", expenseId);
         Expense expense = expensePort.loadExpense(expenseId)
                 .orElseThrow(NotFoundException::new);
@@ -87,7 +86,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         log.info("Processing bulk expenses: {} items", expenseDTOs.size());
         return expenseDTOs.stream().map(dto -> {
             java.util.Optional<Expense> existing = expensePort
-                    .loadExpenseByClientReferenceId(dto.getClientReferenceId());
+                    .loadExpense(dto.getExpenseId());
             if (existing.isEmpty()) {
                 return create(dto);
             } else {
@@ -98,10 +97,10 @@ public class ExpenseApplicationService implements ExpenseUseCase {
 
     @Override
     @Transactional
-    public void deleteBulk(List<String> clientReferenceIds) {
-        log.info("Processing bulk delete for {} items", clientReferenceIds.size());
-        clientReferenceIds.forEach(id -> {
-            expensePort.loadExpenseByClientReferenceId(id).ifPresent(expense -> {
+    public void deleteBulk(List<String> expenseIds) {
+        log.info("Processing bulk delete for {} items", expenseIds.size());
+        expenseIds.forEach(id -> {
+            expensePort.loadExpense(id).ifPresent(expense -> {
                 delete(expense.getExpenseId());
             });
         });
@@ -114,7 +113,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         // For now, let's keep it but check if email matches current user?
         // Or if this method is not exposed in UseCase (it is).
         // Let's implement robust check.
-        Long currentUserId = userContext.getCurrentUserId();
+        String currentUserId = userContext.getCurrentUserId();
         // We'd need to load user by email to check ID, or just trust the port
         // constraint if strict.
         // Ideally we should remove this method from UseCase if not needed by API.
@@ -143,14 +142,14 @@ public class ExpenseApplicationService implements ExpenseUseCase {
 
     @Override
     public void submitForExtraction(org.springframework.web.multipart.MultipartFile file, String text,
-            String clientReferenceId) {
-        Long currentUserId = userContext.getCurrentUserId();
+            String expenseId) {
+        String currentUserId = userContext.getCurrentUserId();
         User currentUser = userPort.loadUser(currentUserId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest request = com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest
                 .builder()
-                .userId(String.valueOf(currentUserId))
-                .clientReferenceId(clientReferenceId)
+                .userId(currentUserId)
+                .expenseId(expenseId)
                 .rawText(text)
                 .file(file)
                 .currency(currentUser.getDefaultCurrency())
@@ -190,8 +189,8 @@ public class ExpenseApplicationService implements ExpenseUseCase {
 
             dto.setRawText(data.path("raw_text").asText(null));
             dto.setStatus("PROCESSED_BY_AI");
-            dto.setUserID(Long.valueOf(data.path("user_id").asText("0")));
-            dto.setClientReferenceId(payload.path("clientReferenceId").asText(null));
+            dto.setUserID(data.path("user_id").asText("0"));
+            dto.setExpenseId(payload.path("expenseId").asText(null));
 
             // Create is marked transactional natively and expects internal user override
             // via context,
@@ -202,13 +201,13 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             // logic!
             // We circumvent create() by directly mapping and saving if context is missing.
 
-            handleWebhookCreateInternal(dto, data.path("user_id").asLong(0L));
+            handleWebhookCreateInternal(dto, data.path("user_id").asText("0"));
         } else {
             log.error("AI Microservice reported extraction failure: {}", payload.path("error").asText());
         }
     }
 
-    private void handleWebhookCreateInternal(ExpenseDTO expenseDTO, Long assignedUserId) {
+    private void handleWebhookCreateInternal(ExpenseDTO expenseDTO, String assignedUserId) {
         log.info("Creating internal AI expense for assigned user: {}", assignedUserId);
         Expense expense = new Expense();
 
@@ -221,7 +220,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         expense.setRawText(expenseDTO.getRawText());
         expense.setStatus(expenseDTO.getStatus());
         expense.setExpenseDate(expenseDTO.getExpenseDate());
-        expense.setClientReferenceId(expenseDTO.getClientReferenceId());
+        expense.setExpenseId(expenseDTO.getExpenseId());
         expense.setUserConfirmed(false);
 
         User user = userPort.loadUser(assignedUserId)
@@ -235,7 +234,6 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     private ExpenseDTO mapToDTO(Expense expense) {
         ExpenseDTO expenseDTO = new ExpenseDTO();
         expenseDTO.setExpenseId(expense.getExpenseId());
-        expenseDTO.setClientReferenceId(expense.getClientReferenceId());
         expenseDTO.setAmount(expense.getAmount());
         expenseDTO.setCategory(expense.getCategory());
         expenseDTO.setSubCategory(expense.getSubCategory());
@@ -255,7 +253,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     }
 
     private void mapToEntity(ExpenseDTO expenseDTO, Expense expense) {
-        expense.setClientReferenceId(expenseDTO.getClientReferenceId());
+        expense.setExpenseId(expenseDTO.getExpenseId());
         expense.setAmount(expenseDTO.getAmount());
         expense.setCategory(expenseDTO.getCategory());
         expense.setSubCategory(expenseDTO.getSubCategory());
@@ -277,14 +275,14 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             // Ignore input userID, override with current context or validate match
         }
         // Always force current user
-        Long currentUserId = userContext.getCurrentUserId();
+        String currentUserId = userContext.getCurrentUserId();
         User user = userPort.loadUser(currentUserId)
                 .orElseThrow(() -> new NotFoundException("User not found: " + currentUserId));
         expense.setUser(user);
     }
 
     private void checkOwnership(Expense expense) {
-        Long currentUserId = userContext.getCurrentUserId();
+        String currentUserId = userContext.getCurrentUserId();
         if (!expense.getUser().getUserId().equals(currentUserId)) {
             throw new NotFoundException("Expense not found"); // Standard security practice to return 404
         }

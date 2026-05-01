@@ -5,20 +5,17 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ExpensePort {
-    Optional<Expense> loadExpense(Long expenseId);
-
-    Optional<Expense> loadExpenseByClientReferenceId(String clientReferenceId);
+    Optional<Expense> loadExpense(String expenseId);
 
     List<Expense> loadAllExpenses();
 
-    Expense findFirstByUserId(Long userId);
+    org.springframework.data.domain.Page<Expense> findAll(org.springframework.data.domain.Pageable pageable);
+
+    Expense findFirstByUserId(String userId);
 
     Expense saveExpense(Expense expense);
 
     void deleteExpense(Expense expense);
 
     List<Expense> findAllByUserEmail(String email);
-
-    org.springframework.data.domain.Page<Expense> findAllByUserUserId(Long userId,
-            org.springframework.data.domain.Pageable pageable);
 }

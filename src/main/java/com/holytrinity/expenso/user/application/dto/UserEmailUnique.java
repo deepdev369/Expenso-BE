@@ -55,7 +55,7 @@ public @interface UserEmailUnique {
                     .getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE));
             final String currentId = pathVariables.get("userId");
             if (currentId != null) {
-                String currentEmail = userPort.loadUser(Long.parseLong(currentId))
+                String currentEmail = userPort.loadUser(currentId)
                         .map(User::getEmail)
                         .orElse(null);
                 if (value.equalsIgnoreCase(currentEmail)) {

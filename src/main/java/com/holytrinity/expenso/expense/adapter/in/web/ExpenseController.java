@@ -30,7 +30,7 @@ public class ExpenseController {
     }
 
     @GetMapping("/{expenseId}")
-    public ResponseEntity<ExpenseDTO> getExpense(@PathVariable(name = "expenseId") final Long expenseId) {
+    public ResponseEntity<ExpenseDTO> getExpense(@PathVariable(name = "expenseId") final String expenseId) {
         return ResponseEntity.ok(expenseUseCase.get(expenseId));
     }
 
@@ -42,8 +42,8 @@ public class ExpenseController {
 
     @DeleteMapping("/sync")
     @ApiResponse(responseCode = "204")
-    public ResponseEntity<Void> deleteSyncExpenses(@RequestBody final List<String> clientReferenceIds) {
-        expenseUseCase.deleteBulk(clientReferenceIds);
+    public ResponseEntity<Void> deleteSyncExpenses(@RequestBody final List<String> expenseIds) {
+        expenseUseCase.deleteBulk(expenseIds);
         return ResponseEntity.noContent().build();
     }
 
@@ -52,8 +52,8 @@ public class ExpenseController {
     public ResponseEntity<Void> extractExpense(
             @org.springframework.web.bind.annotation.RequestParam(value = "file", required = false) org.springframework.web.multipart.MultipartFile file,
             @org.springframework.web.bind.annotation.RequestParam(value = "text", required = false) String text,
-            @org.springframework.web.bind.annotation.RequestParam(value = "clientReferenceId", required = true) String clientReferenceId) {
-        expenseUseCase.submitForExtraction(file, text, clientReferenceId);
+            @org.springframework.web.bind.annotation.RequestParam(value = "expenseId", required = true) String expenseId) {
+        expenseUseCase.submitForExtraction(file, text, expenseId);
         return ResponseEntity.accepted().build();
     }
 }

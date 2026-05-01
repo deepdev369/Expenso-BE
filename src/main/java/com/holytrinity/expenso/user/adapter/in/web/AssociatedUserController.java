@@ -22,8 +22,9 @@ public class AssociatedUserController {
     private final AssociatedUserUseCase useCase;
 
     @GetMapping
-    public ResponseEntity<List<AssociatedUserDTO>> getAll() {
-        return ResponseEntity.ok(useCase.findAll());
+    public ResponseEntity<org.springframework.data.domain.Page<AssociatedUserDTO>> getAll(
+            @org.springframework.data.web.PageableDefault(size = 20) org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(useCase.findAll(pageable));
     }
 
     @PostMapping("/sync")
@@ -32,8 +33,8 @@ public class AssociatedUserController {
     }
 
     @DeleteMapping("/sync")
-    public ResponseEntity<Void> deleteBulk(@RequestBody final List<String> clientReferenceIds) {
-        useCase.deleteBulk(clientReferenceIds);
+    public ResponseEntity<Void> deleteBulk(@RequestBody final List<String> associatedUserIds) {
+        useCase.deleteBulk(associatedUserIds);
         return ResponseEntity.noContent().build();
     }
 }

@@ -6,15 +6,8 @@ import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface SpringDataExpenseRepository extends JpaRepository<Expense, Long> {
-    Expense findFirstByUserUserId(Long userId);
-
-    java.util.Optional<Expense> findByClientReferenceId(String clientReferenceId);
-
-    List<Expense> findAllByUserUserId(Long userId);
+public interface SpringDataExpenseRepository extends JpaRepository<Expense, String> {
+    Expense findFirstByUserUserId(String userId);
 
     List<Expense> findAllByUserEmail(String email);
-
-    org.springframework.data.domain.Page<Expense> findAllByUserUserId(Long userId,
-            org.springframework.data.domain.Pageable pageable);
 }

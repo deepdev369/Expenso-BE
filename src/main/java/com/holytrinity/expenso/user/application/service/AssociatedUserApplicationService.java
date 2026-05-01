@@ -28,18 +28,14 @@ public class AssociatedUserApplicationService implements AssociatedUserUseCase {
     @Override
     public List<AssociatedUserDTO> syncBulk(List<AssociatedUserDTO> dtos) {
         log.info("Processing bulk associated users: {} items", dtos.size());
-        Long currentUserId = userContext.getCurrentUserId();
+        String currentUserId = userContext.getCurrentUserId();
         User currentUser = userPort.loadUser(currentUserId).orElseThrow(NotFoundException::new);
 
         return dtos.stream().map(dto -> {
             Optional<AssociatedUser> existing = associatedUserPort
-                    .loadAssociatedUserByClientReferenceId(dto.getClientReferenceId());
+                    .loadAssociatedUser(dto.getAssociatedUserId());
             AssociatedUser entity = existing.orElseGet(AssociatedUser::new);
-
-            entity.setClientReferenceId(dto.getClientReferenceId());
-            entity.setName(dto.getName());
-            entity.setPhone(dto.getPhone());
-            entity.setEmail(dto.getEmail());
+            mapToEntity(dto, entity);
             entity.setUser(currentUser);
 
             if (dto.getVersion() != null) {
@@ -52,9 +48,9 @@ public class AssociatedUserApplicationService implements AssociatedUserUseCase {
     }
 
     @Override
-    public void deleteBulk(List<String> clientReferenceIds) {
-        clientReferenceIds.forEach(id -> {
-            associatedUserPort.loadAssociatedUserByClientReferenceId(id).ifPresent(entity -> {
+    public void deleteBulk(List<String> associatedUserIds) {
+        associatedUserIds.forEach(id -> {
+            associatedUserPort.loadAssociatedUser(id).ifPresent(entity -> {
                 associatedUserPort.deleteAssociatedUser(entity);
             });
         });
@@ -62,21 +58,28 @@ public class AssociatedUserApplicationService implements AssociatedUserUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public List<AssociatedUserDTO> findAll() {
-        Long currentUserId = userContext.getCurrentUserId();
-        return associatedUserPort.loadAllByUserId(currentUserId).stream()
-                .map(this::mapToDTO).toList();
+    public org.springframework.data.domain.Page<AssociatedUserDTO> findAll(org.springframework.data.domain.Pageable pageable) {
+        return associatedUserPort.loadAll(pageable)
+                .map(this::mapToDTO);
     }
 
     private AssociatedUserDTO mapToDTO(AssociatedUser entity) {
         AssociatedUserDTO dto = new AssociatedUserDTO();
-        dto.setId(entity.getId());
-        dto.setClientReferenceId(entity.getClientReferenceId());
+        dto.setAssociatedUserId(entity.getAssociatedUserId());
         dto.setName(entity.getName());
         dto.setPhone(entity.getPhone());
         dto.setEmail(entity.getEmail());
-        dto.setUserId(entity.getUser().getUserId());
         dto.setVersion(entity.getVersion());
         return dto;
+    }
+
+    private void mapToEntity(AssociatedUserDTO dto, AssociatedUser entity) {
+        entity.setAssociatedUserId(dto.getAssociatedUserId());
+        entity.setName(dto.getName());
+        entity.setPhone(dto.getPhone());
+        entity.setEmail(dto.getEmail());
+        if (dto.getVersion() != null) {
+            entity.setVersion(dto.getVersion());
+        }
     }
 }

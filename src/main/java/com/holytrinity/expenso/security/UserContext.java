@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserContext {
 
-    public Long getCurrentUserId() {
+    public String getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new IllegalStateException("No authenticated user found");

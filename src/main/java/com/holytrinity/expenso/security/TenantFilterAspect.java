@@ -19,7 +19,7 @@ public class TenantFilterAspect {
 
     @Before("execution(* com.holytrinity.expenso..*Repository.*(..))")
     public void enableTenantFilter() {
-        Long userId = userContext.getCurrentUserId();
+        String userId = userContext.getCurrentUserId();
         if (userId != null) {
             Session session = entityManager.unwrap(Session.class);
             session.enableFilter("tenantFilter").setParameter("userId", userId);

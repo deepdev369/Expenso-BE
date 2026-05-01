@@ -9,11 +9,7 @@ import lombok.Setter;
 @Setter
 public class AssociatedUserDTO {
 
-    private Long id;
-
-    @NotNull
-    @Size(max = 255)
-    private String clientReferenceId;
+    private String associatedUserId;
 
     @NotNull
     @Size(max = 255)
@@ -25,8 +21,7 @@ public class AssociatedUserDTO {
     @Size(max = 255)
     private String email;
 
-    @NotNull
-    private Long userId;
+
 
     private Long version;
 }

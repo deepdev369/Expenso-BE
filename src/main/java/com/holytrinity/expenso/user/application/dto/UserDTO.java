@@ -10,13 +10,9 @@ import lombok.Setter;
 @Setter
 public class UserDTO {
 
-    private Long userId;
+    private String userId;
 
     private Long version;
-
-    @NotNull
-    @Size(max = 255)
-    private String clientReferenceId;
 
     @NotNull
     @Size(max = 255)

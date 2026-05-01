@@ -4,10 +4,8 @@ import com.holytrinity.expenso.user.domain.User;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface SpringDataUserRepository extends JpaRepository<User, Long> {
+public interface SpringDataUserRepository extends JpaRepository<User, String> {
     boolean existsByEmailIgnoreCase(String email);
 
     Optional<User> findByEmail(String email);
-
-    Optional<User> findByClientReferenceId(String clientReferenceId);
 }

@@ -8,6 +8,6 @@ import lombok.Getter;
 @AllArgsConstructor
 public class BeforeDeleteUser {
 
-    private Long userId;
+    private String userId;
 
 }

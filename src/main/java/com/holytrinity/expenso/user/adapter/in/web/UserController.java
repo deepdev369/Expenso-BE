@@ -11,27 +11,27 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping(value = "/api/users", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/api/user", produces = MediaType.APPLICATION_JSON_VALUE)
 @RequiredArgsConstructor
 public class UserController {
 
     private final UserUseCase userUseCase;
+    private final com.holytrinity.expenso.security.UserContext userContext;
 
     @GetMapping
     public ResponseEntity<List<UserDTO>> getAllUsers() {
         return ResponseEntity.ok(userUseCase.findAllUsers());
     }
 
-    @GetMapping("/{userId}")
-    public ResponseEntity<UserDTO> getUser(@PathVariable(name = "userId") final Long userId) {
-        return ResponseEntity.ok(userUseCase.getUser(userId));
+    @GetMapping("/me")
+    public ResponseEntity<UserDTO> getUser() {
+        return ResponseEntity.ok(userUseCase.getUser(userContext.getCurrentUserId()));
     }
 
     @PostMapping("/sync")

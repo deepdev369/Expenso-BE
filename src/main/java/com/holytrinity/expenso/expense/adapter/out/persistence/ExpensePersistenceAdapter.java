@@ -14,13 +14,8 @@ public class ExpensePersistenceAdapter implements ExpensePort {
     private final SpringDataExpenseRepository expenseRepository;
 
     @Override
-    public Optional<Expense> loadExpense(Long expenseId) {
+    public Optional<Expense> loadExpense(String expenseId) {
         return expenseRepository.findById(expenseId);
-    }
-
-    @Override
-    public Optional<Expense> loadExpenseByClientReferenceId(String clientReferenceId) {
-        return expenseRepository.findByClientReferenceId(clientReferenceId);
     }
 
     @Override
@@ -29,7 +24,7 @@ public class ExpensePersistenceAdapter implements ExpensePort {
     }
 
     @Override
-    public Expense findFirstByUserId(Long userId) {
+    public Expense findFirstByUserId(String userId) {
         return expenseRepository.findFirstByUserUserId(userId);
     }
 
@@ -49,8 +44,7 @@ public class ExpensePersistenceAdapter implements ExpensePort {
     }
 
     @Override
-    public org.springframework.data.domain.Page<Expense> findAllByUserUserId(Long userId,
-            org.springframework.data.domain.Pageable pageable) {
-        return expenseRepository.findAllByUserUserId(userId, pageable);
+    public org.springframework.data.domain.Page<Expense> findAll(org.springframework.data.domain.Pageable pageable) {
+        return expenseRepository.findAll(pageable);
     }
 }

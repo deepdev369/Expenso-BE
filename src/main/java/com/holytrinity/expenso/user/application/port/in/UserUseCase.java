@@ -6,11 +6,13 @@ import java.util.List;
 
 public interface UserUseCase {
 
-    UserDTO getUser(Long userId);
+    UserDTO getUser(String userId);
+
+    UserDTO getUserByEmail(String email);
 
     List<UserDTO> findAllUsers();
 
     List<UserDTO> syncBulk(List<UserDTO> userDTOs);
 
-    void deleteBulk(List<String> clientReferenceIds);
+    void deleteBulk(List<String> userIds);
 }

@@ -6,7 +6,7 @@ import java.util.List;
 public interface AssociatedUserUseCase {
     List<AssociatedUserDTO> syncBulk(List<AssociatedUserDTO> dtos);
 
-    void deleteBulk(List<String> clientReferenceIds);
+    void deleteBulk(List<String> associatedUserIds);
 
-    List<AssociatedUserDTO> findAll();
+    org.springframework.data.domain.Page<AssociatedUserDTO> findAll(org.springframework.data.domain.Pageable pageable);
 }

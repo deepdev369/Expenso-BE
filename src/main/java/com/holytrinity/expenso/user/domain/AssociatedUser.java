@@ -4,12 +4,9 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.SequenceGenerator;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import lombok.Getter;
@@ -26,7 +23,7 @@ import org.hibernate.annotations.ParamDef;
 @Table(name = "associated_user")
 @EntityListeners(AuditingEntityListener.class)
 @org.hibernate.annotations.SQLRestriction("deleted = false")
-@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "userId", type = Long.class))
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "userId", type = String.class))
 @Filter(name = "tenantFilter", condition = "user_id = :userId")
 @Getter
 @Setter
@@ -34,12 +31,7 @@ public class AssociatedUser {
 
     @Id
     @Column(nullable = false, updatable = false)
-    @SequenceGenerator(name = "primary_sequence", sequenceName = "primary_sequence", allocationSize = 1, initialValue = 10000)
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "primary_sequence")
-    private Long id;
-
-    @Column(nullable = false, unique = true, updatable = false)
-    private String clientReferenceId;
+    private String associatedUserId;
 
     @Column(nullable = false)
     private String name;

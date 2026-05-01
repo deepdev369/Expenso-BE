@@ -33,8 +33,16 @@ public class UserApplicationService implements UserUseCase {
 
     @Override
     @Transactional(readOnly = true)
-    public UserDTO getUser(Long userId) {
+    public UserDTO getUser(String userId) {
         return userPort.loadUser(userId)
+                .map(this::mapToDTO)
+                .orElseThrow(NotFoundException::new);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserDTO getUserByEmail(String email) {
+        return userPort.loadUserByEmail(email)
                 .map(this::mapToDTO)
                 .orElseThrow(NotFoundException::new);
     }
@@ -45,23 +53,16 @@ public class UserApplicationService implements UserUseCase {
             throw new ResourceAlreadyExistsException("User with email " + userDTO.getEmail() + " already exists");
         }
         User user = new User();
+        user.setUserId(userDTO.getUserId());
         mapToEntity(userDTO, user);
         User savedUser = userPort.saveUser(user);
         log.info("User created with ID: {}", savedUser.getUserId());
         return mapToDTO(savedUser);
     }
 
-    private UserDTO updateUser(Long userId, UserDTO userDTO) {
-        log.info("Updating user with ID: {}", userId);
-        User user = userPort.loadUser(userId)
-                .orElseThrow(NotFoundException::new);
-        mapToEntity(userDTO, user);
-        User updatedUser = userPort.saveUser(user);
-        log.info("User updated: {}", userId);
-        return mapToDTO(updatedUser);
-    }
 
-    private void deleteUser(Long userId) {
+
+    private void deleteUser(String userId) {
         log.info("Deleting user with ID: {}", userId);
         User user = userPort.loadUser(userId)
                 .orElseThrow(NotFoundException::new);
@@ -75,21 +76,23 @@ public class UserApplicationService implements UserUseCase {
     public List<UserDTO> syncBulk(List<UserDTO> userDTOs) {
         log.info("Processing bulk users: {} items", userDTOs.size());
         return userDTOs.stream().map(dto -> {
-            java.util.Optional<User> existing = userPort.loadUserByClientReferenceId(dto.getClientReferenceId());
+            java.util.Optional<User> existing = userPort.loadUser(dto.getUserId());
             if (existing.isEmpty()) {
                 return createUser(dto);
             } else {
-                return updateUser(existing.get().getUserId(), dto);
+                User user = existing.get();
+                mapToEntity(dto, user);
+                return mapToDTO(userPort.saveUser(user));
             }
         }).toList();
     }
 
     @Override
     @Transactional
-    public void deleteBulk(List<String> clientReferenceIds) {
-        log.info("Processing bulk user delete for {} items", clientReferenceIds.size());
-        clientReferenceIds.forEach(id -> {
-            userPort.loadUserByClientReferenceId(id).ifPresent(user -> {
+    public void deleteBulk(List<String> userIds) {
+        log.info("Processing bulk user delete for {} items", userIds.size());
+        userIds.forEach(id -> {
+            userPort.loadUser(id).ifPresent(user -> {
                 deleteUser(user.getUserId());
             });
         });
@@ -98,7 +101,6 @@ public class UserApplicationService implements UserUseCase {
     private UserDTO mapToDTO(User user) {
         UserDTO userDTO = new UserDTO();
         userDTO.setUserId(user.getUserId());
-        userDTO.setClientReferenceId(user.getClientReferenceId());
         userDTO.setEmail(user.getEmail());
         userDTO.setUserName(user.getUserName());
         userDTO.setPhone(user.getPhone());
@@ -117,7 +119,6 @@ public class UserApplicationService implements UserUseCase {
     }
 
     private void mapToEntity(UserDTO userDTO, User user) {
-        user.setClientReferenceId(userDTO.getClientReferenceId());
         user.setEmail(userDTO.getEmail());
         user.setUserName(userDTO.getUserName());
         user.setPhone(userDTO.getPhone());

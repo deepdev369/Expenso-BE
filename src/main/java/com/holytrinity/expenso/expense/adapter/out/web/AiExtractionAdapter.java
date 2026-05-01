@@ -37,8 +37,8 @@ public class AiExtractionAdapter implements AiExtractionPort {
         
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("user_id", request.getUserId());
-        if (request.getClientReferenceId() != null) {
-            body.add("clientReferenceId", request.getClientReferenceId());
+        if (request.getExpenseId() != null) {
+            body.add("expenseId", request.getExpenseId());
         }
         if (request.getWebhookUrl() != null) {
             body.add("webhook_url", request.getWebhookUrl());

@@ -12,7 +12,7 @@ import java.util.Collections;
 @Getter
 public class SecurityUser implements UserDetails {
 
-    private final Long userId;
+    private final String userId;
     private final String email;
     private final String password;
     private final Collection<? extends GrantedAuthority> authorities;

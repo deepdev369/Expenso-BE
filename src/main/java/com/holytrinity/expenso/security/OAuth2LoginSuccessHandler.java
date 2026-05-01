@@ -36,7 +36,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         // Check if user exists, if not create
         if (!userPort.existsByEmail(email)) {
             UserDTO newUser = new UserDTO();
-            newUser.setClientReferenceId(java.util.UUID.randomUUID().toString());
+            newUser.setUserId(java.util.UUID.randomUUID().toString());
             newUser.setEmail(email);
             newUser.setUserName(name);
             newUser.setEmailVerified(true); // Assumed verified from OAuth

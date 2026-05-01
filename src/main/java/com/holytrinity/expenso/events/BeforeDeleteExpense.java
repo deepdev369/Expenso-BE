@@ -6,5 +6,5 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public class BeforeDeleteExpense {
-    private final Long expenseId;
+    private final String expenseId;
 }
