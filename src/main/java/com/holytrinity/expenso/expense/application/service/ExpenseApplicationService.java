@@ -58,7 +58,9 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         return mapToDTO(savedExpense);
     }
 
-    private ExpenseDTO update(String expenseId, ExpenseDTO expenseDTO) {
+    @Override
+    @Transactional
+    public ExpenseDTO update(String expenseId, ExpenseDTO expenseDTO) {
         log.info("Updating expense with ID: {}", expenseId);
         Expense expense = expensePort.loadExpense(expenseId)
                 .orElseThrow(NotFoundException::new);
@@ -69,7 +71,9 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         return mapToDTO(updatedExpense);
     }
 
-    private void delete(String expenseId) {
+    @Override
+    @Transactional
+    public void delete(String expenseId) {
         log.info("Deleting expense with ID: {}", expenseId);
         Expense expense = expensePort.loadExpense(expenseId)
                 .orElseThrow(NotFoundException::new);

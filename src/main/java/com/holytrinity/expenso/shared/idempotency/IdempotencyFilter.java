@@ -25,6 +25,12 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
+        String uri = request.getRequestURI();
+        if (uri.startsWith("/api/v1/webhook/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String key = request.getHeader("Idempotency-Key");
         if (key == null || key.isBlank()) {
             filterChain.doFilter(request, response);

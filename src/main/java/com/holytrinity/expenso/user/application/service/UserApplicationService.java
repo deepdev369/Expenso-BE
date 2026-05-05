@@ -60,7 +60,11 @@ public class UserApplicationService implements UserUseCase {
             throw new ResourceAlreadyExistsException("User with email " + userDTO.getEmail() + " already exists");
         }
         User user = new User();
-        user.setUserId(userDTO.getUserId());
+        if (userDTO.getUserId() == null || userDTO.getUserId().trim().isEmpty()) {
+            user.setUserId(java.util.UUID.randomUUID().toString());
+        } else {
+            user.setUserId(userDTO.getUserId());
+        }
         mapToEntity(userDTO, user);
         User savedUser = userPort.saveUser(user);
         log.info("User created with ID: {}", savedUser.getUserId());

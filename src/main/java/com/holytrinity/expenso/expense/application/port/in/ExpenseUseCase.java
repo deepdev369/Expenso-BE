@@ -10,6 +10,10 @@ import java.util.List;
 public interface ExpenseUseCase {
     ExpenseDTO get(String expenseId);
 
+    ExpenseDTO update(String expenseId, ExpenseDTO expenseDTO);
+
+    void delete(String expenseId);
+
     Page<ExpenseDTO> findAll(Pageable pageable);
 
     List<ExpenseDTO> processBulk(List<ExpenseDTO> expenseDTOs);
