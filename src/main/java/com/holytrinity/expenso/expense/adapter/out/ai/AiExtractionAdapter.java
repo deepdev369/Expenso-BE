@@ -14,6 +14,14 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.holytrinity.expenso.expense.application.port.in.ExpenseUseCase;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.core.task.TaskExecutor;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 @Component
 @RequiredArgsConstructor
@@ -28,6 +36,14 @@ public class AiExtractionAdapter implements AiExtractionPort {
 
     private final ObjectMapper objectMapper;
     private final RestClient.Builder restClientBuilder;
+
+    @Autowired
+    @Lazy
+    private ExpenseUseCase expenseUseCase;
+
+    @Autowired
+    @Qualifier("applicationTaskExecutor")
+    private TaskExecutor taskExecutor;
 
     @Override
     public void submitExpenseForExtraction(AiExtractionRequest request) {
@@ -77,12 +93,25 @@ public class AiExtractionAdapter implements AiExtractionPort {
         log.info("Submitting expense extraction to AI for user {}, webhook: {}", request.getUserId(),
                 request.getWebhookUrl());
 
-        restClient.post()
-                .uri("/api/v1/expense/extract")
-                .header("X-Internal-Token", internalToken)
-                .contentType(MediaType.MULTIPART_FORM_DATA)
-                .body(body)
-                .retrieve()
-                .body(String.class); // Read string body
+        CompletableFuture.runAsync(() -> {
+            try {
+                restClient.post()
+                        .uri("/api/v1/expense/extract")
+                        .header("X-Internal-Token", internalToken)
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .body(body)
+                        .retrieve()
+                        .body(String.class); // Read string body
+            } catch (Exception e) {
+                log.error("Failed to submit request to AI Service", e);
+                ObjectNode payload = JsonNodeFactory.instance.objectNode();
+                payload.put("success", false);
+                payload.put("error", "HTTP request to AI service failed: " + e.getMessage());
+                if (request.getExpenseId() != null) {
+                    payload.put("expenseId", request.getExpenseId());
+                }
+                expenseUseCase.handleExtractionCallback(payload);
+            }
+        }, taskExecutor);
     }
 }

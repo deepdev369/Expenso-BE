@@ -11,11 +11,9 @@ public interface ExpensePort {
 
     org.springframework.data.domain.Page<Expense> findAll(org.springframework.data.domain.Pageable pageable);
 
-    Expense findFirstByUserId(String userId);
+    boolean existsByUserId(String userId);
 
     Expense saveExpense(Expense expense);
 
     void deleteExpense(Expense expense);
-
-    List<Expense> findAllByUserEmail(String email);
 }

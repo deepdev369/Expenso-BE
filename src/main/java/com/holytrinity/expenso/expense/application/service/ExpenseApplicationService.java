@@ -106,36 +106,14 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         });
     }
 
-    @Override
-    public List<ExpenseDTO> findAllByUserEmail(String email) {
-        // Deprecated or Admin only. Enforcing check just in case.
-        // Actually, strictly isolating means we shouldn't allow this unless admin.
-        // For now, let's keep it but check if email matches current user?
-        // Or if this method is not exposed in UseCase (it is).
-        // Let's implement robust check.
-        String currentUserId = userContext.getCurrentUserId();
-        // We'd need to load user by email to check ID, or just trust the port
-        // constraint if strict.
-        // Ideally we should remove this method from UseCase if not needed by API.
-        // But for now, let's just delegate to port which *should* be safe if we only
-        // use it for internal logic?
-        // User requirements: "Pagination never leaks data".
-        // Let's allow it but ensure it matches current user.
-        // Actually simpler: This method was added by USER in previous turns.
-        // Let's soft-deprecate it or wrap with check.
-        return expensePort.findAllByUserEmail(email).stream()
-                .filter(e -> e.getUser().getUserId().equals(currentUserId))
-                .map(this::mapToDTO)
-                .toList();
-    }
+
 
     @EventListener(BeforeDeleteUser.class)
     public void on(final BeforeDeleteUser event) {
-        final ReferencedException referencedException = new ReferencedException();
-        final Expense userIDExpense = expensePort.findFirstByUserId(event.getUserId());
-        if (userIDExpense != null) {
+        if (expensePort.existsByUserId(event.getUserId())) {
+            final ReferencedException referencedException = new ReferencedException();
             referencedException.setKey("user.expense.userID.referenced");
-            referencedException.addParam(userIDExpense.getExpenseId());
+            referencedException.addParam(event.getUserId());
             throw referencedException;
         }
     }
@@ -146,6 +124,12 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         String currentUserId = userContext.getCurrentUserId();
         User currentUser = userPort.loadUser(currentUserId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+
+        if (expenseId != null && !expenseId.trim().isEmpty()) {
+            Expense existing = expensePort.loadExpense(expenseId)
+                    .orElseThrow(() -> new NotFoundException("Expense not found"));
+            checkOwnership(existing);
+        }
         com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest request = com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest
                 .builder()
                 .userId(currentUserId)
@@ -183,13 +167,24 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             // In python, it's typically 'date'. We handle both numeric and string fallback
             if (data.path("date").isNumber()) {
                 dto.setExpenseDate(data.path("date").asLong(System.currentTimeMillis()));
+            } else if (data.path("date").isTextual() && !data.path("date").asText().isBlank()) {
+                try {
+                    dto.setExpenseDate(java.time.Instant.parse(data.path("date").asText()).toEpochMilli());
+                } catch (Exception e) {
+                    dto.setExpenseDate(System.currentTimeMillis());
+                }
             } else {
                 dto.setExpenseDate(System.currentTimeMillis());
             }
 
             dto.setRawText(data.path("raw_text").asText(null));
             dto.setStatus("PROCESSED_BY_AI");
-            dto.setUserID(data.path("user_id").asText("0"));
+            
+            if (!data.has("user_id") || data.path("user_id").isNull() || data.path("user_id").asText().isBlank() || "0".equals(data.path("user_id").asText())) {
+                log.error("Webhook rejected: Missing or invalid user_id in AI payload");
+                return;
+            }
+            dto.setUserID(data.path("user_id").asText());
             dto.setExpenseId(payload.path("expenseId").asText(null));
 
             // Create is marked transactional natively and expects internal user override
@@ -201,15 +196,36 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             // logic!
             // We circumvent create() by directly mapping and saving if context is missing.
 
-            handleWebhookCreateInternal(dto, data.path("user_id").asText("0"));
+            handleWebhookCreateInternal(dto, dto.getUserID());
         } else {
             log.error("AI Microservice reported extraction failure: {}", payload.path("error").asText());
+            String expenseId = payload.path("expenseId").asText(null);
+            if (expenseId != null && !expenseId.trim().isEmpty() && !expenseId.equals("null")) {
+                expensePort.loadExpense(expenseId).ifPresent(expense -> {
+                    expense.setStatus("FAILED_EXTRACTION");
+                    expensePort.saveExpense(expense);
+                    log.info("Updated expense {} status to FAILED_EXTRACTION", expenseId);
+                });
+            }
         }
     }
 
     private void handleWebhookCreateInternal(ExpenseDTO expenseDTO, String assignedUserId) {
         log.info("Creating internal AI expense for assigned user: {}", assignedUserId);
-        Expense expense = new Expense();
+        
+        java.util.Optional<Expense> existingOpt = expenseDTO.getExpenseId() != null ? 
+            expensePort.loadExpense(expenseDTO.getExpenseId()) : java.util.Optional.empty();
+            
+        Expense expense;
+        if (existingOpt.isPresent()) {
+            expense = existingOpt.get();
+            if (!expense.getUser().getUserId().equals(assignedUserId)) {
+                log.error("Webhook IDOR attempt! Expense {} does not belong to assigned user {}", expenseDTO.getExpenseId(), assignedUserId);
+                throw new org.springframework.security.access.AccessDeniedException("Cannot overwrite another user's expense via webhook");
+            }
+        } else {
+            expense = new Expense();
+        }
 
         expense.setAmount(expenseDTO.getAmount());
         expense.setCategory(expenseDTO.getCategory());

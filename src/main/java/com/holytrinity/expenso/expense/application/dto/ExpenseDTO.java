@@ -40,10 +40,8 @@ public class ExpenseDTO {
 
     private Boolean userConfirmed;
 
-    @Size(max = 255)
     private String rawText;
 
-    @Size(max = 255)
     private String normalizedText;
 
     @Size(max = 255)

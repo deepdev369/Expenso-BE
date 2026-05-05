@@ -24,8 +24,8 @@ public class ExpensePersistenceAdapter implements ExpensePort {
     }
 
     @Override
-    public Expense findFirstByUserId(String userId) {
-        return expenseRepository.findFirstByUserUserId(userId);
+    public boolean existsByUserId(String userId) {
+        return expenseRepository.existsByUserUserId(userId);
     }
 
     @Override
@@ -36,11 +36,6 @@ public class ExpensePersistenceAdapter implements ExpensePort {
     @Override
     public void deleteExpense(Expense expense) {
         expenseRepository.delete(expense);
-    }
-
-    @Override
-    public List<Expense> findAllByUserEmail(String email) {
-        return expenseRepository.findAllByUserEmail(email);
     }
 
     @Override

@@ -70,12 +70,12 @@ public class Expense {
         private String source;
 
         @Column
-        private Boolean userConfirmed;
+        private Boolean userConfirmed = false;
 
-        @Column
+        @Column(columnDefinition = "TEXT")
         private String rawText;
 
-        @Column
+        @Column(columnDefinition = "TEXT")
         private String normalizedText;
 
         @Column
