@@ -11,4 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class AuthResponse {
     private String token;
+    private String refreshToken;
+    private long expiresIn;
+    private boolean isNewUser;
+    private com.holytrinity.expenso.user.application.dto.UserDTO user;
 }

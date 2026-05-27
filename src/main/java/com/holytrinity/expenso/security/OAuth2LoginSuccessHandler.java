@@ -23,6 +23,10 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     private final JwtUtils jwtUtils;
     private final UserUseCase userUseCase;
     private final UserPort userPort;
+    private final org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.oauth2.redirect-url}")
+    private String redirectUrl;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
@@ -49,17 +53,12 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         }
 
         // Generate Token
-        // We need to load user details for token generation
-        // Simulating UserDetails for now since we have the email
-        org.springframework.security.core.userdetails.User userDetails = new org.springframework.security.core.userdetails.User(
-                email, "", Collections.singletonList(() -> "USER")); // dummy authorities for now
+        // Load genuine UserDetails from the database
+        org.springframework.security.core.userdetails.UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
         String token = jwtUtils.generateToken(userDetails);
 
-        // Redirect to frontend with token
-        // In a real app, this might redirect to a specific frontend URL
-        // For now, let's just write it to response or redirect to a dummy endpoint
-        // Assuming frontend is at localhost:3000
-        response.sendRedirect("http://localhost:3000/oauth2/redirect?token=" + token);
+        // Redirect to the configured frontend URL with the token
+        response.sendRedirect(redirectUrl + "?token=" + token);
     }
 }

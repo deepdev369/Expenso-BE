@@ -120,6 +120,7 @@ public class UserApplicationService implements UserUseCase {
     private UserDTO mapToDTO(User user) {
         UserDTO userDTO = new UserDTO();
         userDTO.setUserId(user.getUserId());
+        userDTO.setVersion(user.getVersion());
         userDTO.setEmail(user.getEmail());
         userDTO.setUserName(user.getUserName());
         userDTO.setPhone(user.getPhone());
