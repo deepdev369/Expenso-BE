@@ -18,4 +18,14 @@ public class JacksonConfig {
                 .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY);
     }
 
+    @Bean
+    public com.fasterxml.jackson.databind.ObjectMapper jackson2ObjectMapper() {
+        return new com.fasterxml.jackson.databind.ObjectMapper();
+    }
+
+    @Bean
+    public org.springframework.web.client.RestClient.Builder restClientBuilder() {
+        return org.springframework.web.client.RestClient.builder();
+    }
+
 }
