@@ -42,4 +42,10 @@ public class ExpensePersistenceAdapter implements ExpensePort {
     public org.springframework.data.domain.Page<Expense> findAll(org.springframework.data.domain.Pageable pageable) {
         return expenseRepository.findAll(pageable);
     }
+
+    @Override
+    public org.springframework.data.domain.Page<Expense> findAllByUserId(
+            String userId, org.springframework.data.domain.Pageable pageable) {
+        return expenseRepository.findByUserUserIdAndDeletedFalse(userId, pageable);
+    }
 }

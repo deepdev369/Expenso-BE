@@ -10,6 +10,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Receives async extraction results from the AI microservice.
+ *
+ * Auth is handled upstream by {@link com.holytrinity.expenso.security.InternalTokenFilter}
+ * which validates X-Internal-Token before this controller is ever reached.
+ * A second redundant secret check was removed to prevent misconfiguration causing
+ * legitimate webhook calls to be rejected.
+ */
 @RestController
 @RequestMapping("/api/v1/webhook/expense-ai")
 @RequiredArgsConstructor
@@ -18,18 +26,8 @@ public class AIExpenseWebhookController {
 
     private final ExpenseUseCase expenseUseCase;
 
-    @org.springframework.beans.factory.annotation.Value("${app.webhook.secret}")
-    private String webhookSecret;
-
     @PostMapping
-    public ResponseEntity<Void> handleWebhook(
-            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Webhook-Secret", required = false) String secret,
-            @RequestBody JsonNode payload) {
-        if (secret == null || !java.security.MessageDigest.isEqual(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), webhookSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
-            log.warn("Unauthorized webhook attempt");
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
-        }
-
+    public ResponseEntity<Void> handleWebhook(@RequestBody JsonNode payload) {
         log.info("Incoming AI Webhook payload received");
         expenseUseCase.handleExtractionCallback(payload);
         return ResponseEntity.ok().build();

@@ -30,6 +30,7 @@ import java.util.Optional;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Random;
+import java.security.SecureRandom;
 import org.springframework.beans.factory.annotation.Value;
 import com.holytrinity.expenso.auth.application.dto.GoogleOAuthRequest;
 import com.holytrinity.expenso.auth.application.dto.PhoneAuthRequest;
@@ -58,8 +59,14 @@ public class AuthService {
     @Value("${app.jwt.refresh-expiration-ms}")
     private long refreshExpirationMs;
 
-    // TODO: Replace in-memory cache with Redis for distributed environments
-    private final Map<String, String> otpCache = new ConcurrentHashMap<>();
+    // OTP store with expiry — each entry holds the code and its expiry epoch millis.
+    // TODO: Replace with Redis for multi-instance / persistent deployments.
+    private record OtpEntry(String code, long expiresAt) {
+        boolean isExpired() { return System.currentTimeMillis() > expiresAt; }
+    }
+    private final Map<String, OtpEntry> otpCache = new ConcurrentHashMap<>();
+    private static final long OTP_TTL_MS = 5 * 60 * 1000L; // 5 minutes
+    private final SecureRandom secureRandom = new SecureRandom();
 
     private AuthResponse buildAuthResponse(UserDetails userDetails, String userId, boolean isNewUser) {
         String jwtToken = jwtUtils.generateToken(userDetails);
@@ -198,16 +205,23 @@ public class AuthService {
     }
 
     public void sendPhoneOtp(PhoneAuthRequest request) {
-        String otp = String.format("%06d", new Random().nextInt(999999));
-        otpCache.put(request.getPhoneNumber(), otp);
-        
-        smsProviderPort.sendSms(request.getPhoneNumber(), "Your Expenso OTP is: " + otp);
+        // SecureRandom — cryptographically safe, unlike java.util.Random
+        String otp = String.format("%06d", secureRandom.nextInt(1_000_000));
+        otpCache.put(request.getPhoneNumber(), new OtpEntry(otp, System.currentTimeMillis() + OTP_TTL_MS));
+        smsProviderPort.sendSms(request.getPhoneNumber(), "Your Expenso OTP is: " + otp + ". Valid for 5 minutes.");
     }
 
     public AuthResponse verifyPhoneOtp(PhoneVerifyRequest request) {
-        String cachedOtp = otpCache.get(request.getPhoneNumber());
-        if (cachedOtp == null || !cachedOtp.equals(request.getOtp())) {
-            throw new RuntimeException("Invalid or expired OTP");
+        OtpEntry entry = otpCache.get(request.getPhoneNumber());
+        if (entry == null) {
+            throw new RuntimeException("OTP not found. Please request a new OTP.");
+        }
+        if (entry.isExpired()) {
+            otpCache.remove(request.getPhoneNumber());
+            throw new RuntimeException("OTP has expired. Please request a new OTP.");
+        }
+        if (!entry.code().equals(request.getOtp())) {
+            throw new RuntimeException("Invalid OTP.");
         }
         otpCache.remove(request.getPhoneNumber());
 
@@ -223,7 +237,9 @@ public class AuthService {
             UserDTO newUser = new UserDTO();
             newUser.setEmail(mockEmail);
             newUser.setPasswordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
-            newUser.setUserName("Phone User");
+            newUser.setUserName("New User");
+            // NOTE: emailVerified is false by default — a verification flow should be
+            // implemented to allow phone users to link and verify a real email address.
             newUser.setAuthProviders(Collections.singletonList("PHONE"));
             newUser.setEmailVerified(false);
             newUser.setDefaultCurrency("USD");

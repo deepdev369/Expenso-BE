@@ -55,8 +55,8 @@ public class ChatApplicationService implements ChatUseCase {
         log.info("Processing chat prompt for user: {}", userId);
         
         try {
-            // Aggregate user context (top 50 recent expenses)
-            var expenses = expensePort.findAll(PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "expenseDate"))).getContent();
+            // Aggregate user context — ALWAYS scoped to the requesting user
+            var expenses = expensePort.findAllByUserId(userId, PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "expenseDate"))).getContent();
             var goals = planPort.findGoalsByUserId(userId);
             var splits = splitPort.findSplitsByUserId(userId);
             var subscriptions = planPort.findSubscriptionsByUserId(userId);

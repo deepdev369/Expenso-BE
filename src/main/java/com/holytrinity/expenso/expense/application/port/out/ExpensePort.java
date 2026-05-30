@@ -11,6 +11,9 @@ public interface ExpensePort {
 
     org.springframework.data.domain.Page<Expense> findAll(org.springframework.data.domain.Pageable pageable);
 
+    /** Scoped query — only fetches expenses belonging to the given user. */
+    org.springframework.data.domain.Page<Expense> findAllByUserId(String userId, org.springframework.data.domain.Pageable pageable);
+
     boolean existsByUserId(String userId);
 
     Expense saveExpense(Expense expense);
