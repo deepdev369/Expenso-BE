@@ -8,6 +8,8 @@ import com.holytrinity.expenso.auth.application.dto.PhoneAuthRequest;
 import com.holytrinity.expenso.auth.application.dto.PhoneVerifyRequest;
 import com.holytrinity.expenso.auth.application.dto.RefreshRequest;
 import com.holytrinity.expenso.auth.application.dto.SignupRequest;
+import com.holytrinity.expenso.auth.application.dto.EmailAuthRequest;
+import com.holytrinity.expenso.auth.application.dto.EmailVerifyRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +49,18 @@ public class AuthController {
     @PostMapping("/phone/verify-otp")
     public ResponseEntity<AuthResponse> verifyPhoneOtp(@RequestBody @Valid PhoneVerifyRequest request) {
         return ResponseEntity.ok(authService.verifyPhoneOtp(request));
+    }
+
+    @PostMapping("/email/send-verification")
+    public ResponseEntity<Void> sendEmailVerification(@RequestBody @Valid EmailAuthRequest request) {
+        authService.sendEmailVerification(request);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/email/verify")
+    public ResponseEntity<Void> verifyEmailOtp(@RequestBody @Valid EmailVerifyRequest request) {
+        authService.verifyEmailOtp(request);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/refresh")

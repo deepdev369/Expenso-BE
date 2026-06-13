@@ -51,6 +51,7 @@ public class ExpenseDTO {
 
     @NotNull
     @Size(max = 255)
+    @com.fasterxml.jackson.annotation.JsonAlias({"userId", "userID"})
     private String userID;
 
 }

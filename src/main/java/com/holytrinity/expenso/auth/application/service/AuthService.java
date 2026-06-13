@@ -36,6 +36,9 @@ import com.holytrinity.expenso.auth.application.dto.GoogleOAuthRequest;
 import com.holytrinity.expenso.auth.application.dto.PhoneAuthRequest;
 import com.holytrinity.expenso.auth.application.dto.PhoneVerifyRequest;
 import com.holytrinity.expenso.auth.application.dto.SignupRequest;
+import com.holytrinity.expenso.auth.application.dto.EmailAuthRequest;
+import com.holytrinity.expenso.auth.application.dto.EmailVerifyRequest;
+import com.holytrinity.expenso.auth.application.port.out.EmailProviderPort;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +55,7 @@ public class AuthService {
     private final SpringDataRefreshTokenRepository refreshTokenRepository;
     private final List<OAuthProviderPort> oauthProviders;
     private final SmsProviderPort smsProviderPort;
+    private final EmailProviderPort emailProviderPort;
 
     @Value("${app.jwt.expiration-ms}")
     private long jwtExpirationMs;
@@ -257,4 +261,42 @@ public class AuthService {
             return buildAuthResponse(userDetails, user.getUserId(), true);
         }
     }
+
+    public void sendEmailVerification(EmailAuthRequest request) {
+        String otp = String.format("%06d", secureRandom.nextInt(1_000_000));
+        otpCache.put("EMAIL_" + request.getEmail(), new OtpEntry(otp, System.currentTimeMillis() + OTP_TTL_MS));
+        
+        String emailBody = "Welcome to Expenso!\n\n" +
+                           "Your email verification OTP is: " + otp + "\n" +
+                           "This OTP is valid for 5 minutes.\n\n" +
+                           "If you didn't request this, you can ignore this email.";
+                           
+        emailProviderPort.sendEmail(request.getEmail(), "Expenso Email Verification", emailBody);
+    }
+
+    public void verifyEmailOtp(EmailVerifyRequest request) {
+        String cacheKey = "EMAIL_" + request.getEmail();
+        OtpEntry entry = otpCache.get(cacheKey);
+        
+        if (entry == null) {
+            throw new RuntimeException("OTP not found. Please request a new OTP.");
+        }
+        if (entry.isExpired()) {
+            otpCache.remove(cacheKey);
+            throw new RuntimeException("OTP has expired. Please request a new OTP.");
+        }
+        if (!entry.code().equals(request.getOtp())) {
+            throw new RuntimeException("Invalid OTP.");
+        }
+        
+        otpCache.remove(cacheKey);
+
+        // Update user to verified
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new RuntimeException("User not found with this email."));
+        
+        user.setEmailVerified(true);
+        userRepository.save(user);
+    }
 }
+
