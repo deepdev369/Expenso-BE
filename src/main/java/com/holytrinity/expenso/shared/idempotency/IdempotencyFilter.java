@@ -1,5 +1,6 @@
 package com.holytrinity.expenso.shared.idempotency;
 
+import com.holytrinity.expenso.security.UserContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +9,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,13 +22,17 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 public class IdempotencyFilter extends OncePerRequestFilter {
 
     private final IdempotencyKeyRepository idempotencyKeyRepository;
+    private final UserContext userContext;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
 
         String uri = request.getRequestURI();
-        if (uri.startsWith("/api/v1/webhook/")) {
+        String method = request.getMethod();
+        
+        // Skip webhooks and GET requests (GET is naturally idempotent)
+        if (uri.startsWith("/api/v1/webhook/") || "GET".equalsIgnoreCase(method)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -37,11 +43,18 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             return;
         }
 
-        Optional<IdempotencyKey> existingKey = idempotencyKeyRepository.findById(key);
+        String userId = userContext.getCurrentUserIdOrNull();
+        if (userId == null) {
+            // Unauthenticated request (e.g., login/register), skip idempotency
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        Optional<IdempotencyKey> existingKey = idempotencyKeyRepository.findByIdempotencyKeyAndUserId(key, userId);
         if (existingKey.isPresent()) {
             IdempotencyKey stored = existingKey.get();
             if (stored.getExpiresAt().isAfter(LocalDateTime.now())) {
-                log.info("Idempotency key hit: {}", key);
+                log.info("Idempotency key hit for user {}: {}", userId, key);
                 response.setStatus(stored.getResponseStatus());
                 response.setContentType("application/json");
                 if (stored.getResponseBody() != null) {
@@ -56,20 +69,23 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         ContentCachingResponseWrapper responseWrapper = new ContentCachingResponseWrapper(response);
         filterChain.doFilter(request, responseWrapper);
 
-        // Only save successful or client error responses? Or all? User said "Prevent
-        // duplicate processing".
-        // Generally we cache 2xx, maybe 4xx.
-        // Let's cache everything for simplicity as per requirement.
+        int status = responseWrapper.getStatus();
+        
+        // Only cache successful responses (2xx). 
+        // We don't cache 4xx or 5xx so the client can safely retry if needed.
+        if (status >= 200 && status < 300) {
+            String responseBody = new String(responseWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
 
-        String responseBody = new String(responseWrapper.getContentAsByteArray(), StandardCharsets.UTF_8);
-
-        IdempotencyKey newKey = new IdempotencyKey(
-                key,
-                responseWrapper.getStatus(),
-                responseBody,
-                LocalDateTime.now(),
-                LocalDateTime.now().plusHours(24));
-        idempotencyKeyRepository.save(newKey);
+            IdempotencyKey newKey = new IdempotencyKey(
+                    UUID.randomUUID().toString(),
+                    userId,
+                    key,
+                    status,
+                    responseBody,
+                    LocalDateTime.now(),
+                    LocalDateTime.now().plusHours(24));
+            idempotencyKeyRepository.save(newKey);
+        }
 
         responseWrapper.copyBodyToResponse();
     }
