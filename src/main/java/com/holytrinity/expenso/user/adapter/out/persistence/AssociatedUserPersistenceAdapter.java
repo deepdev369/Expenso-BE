@@ -32,4 +32,9 @@ public class AssociatedUserPersistenceAdapter implements AssociatedUserPort {
     public void deleteAssociatedUser(AssociatedUser associatedUser) {
         repository.delete(associatedUser);
     }
+
+    @Override
+    public java.util.List<AssociatedUser> findAllWithDeletedByIdsAndUserId(java.util.List<String> ids, String userId) {
+        return repository.findAllWithDeletedByIdsAndUserId(ids, userId);
+    }
 }

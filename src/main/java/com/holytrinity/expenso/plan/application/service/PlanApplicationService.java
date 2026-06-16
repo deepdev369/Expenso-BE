@@ -22,9 +22,168 @@ public class PlanApplicationService implements PlanUseCase {
     private final PlanPort planPort;
     private final UserPort userPort;
 
-    public PlanApplicationService(PlanPort planPort, UserPort userPort) {
+    private final com.holytrinity.expenso.security.UserContext userContext;
+
+    public PlanApplicationService(PlanPort planPort, UserPort userPort, com.holytrinity.expenso.security.UserContext userContext) {
         this.planPort = planPort;
         this.userPort = userPort;
+        this.userContext = userContext;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<GoalDTO> findAllGoals(org.springframework.data.domain.Pageable pageable) {
+        return planPort.findAllGoals(pageable).map(this::mapGoalToDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public GoalDTO getGoal(String goalId) {
+        Goal goal = planPort.loadGoal(goalId)
+                .orElseThrow(com.holytrinity.expenso.shared.exception.NotFoundException::new);
+        checkGoalOwnership(goal);
+        return mapGoalToDTO(goal);
+    }
+
+    @Override
+    @Transactional
+    public GoalDTO updateGoal(String goalId, GoalDTO dto) {
+        Goal goal = planPort.loadGoal(goalId)
+                .orElseThrow(com.holytrinity.expenso.shared.exception.NotFoundException::new);
+        checkGoalOwnership(goal);
+        
+        goal.setName(dto.getName());
+        goal.setCurrentAmount(dto.getCurrentAmount());
+        goal.setTargetAmount(dto.getTargetAmount());
+        goal.setProjectedDate(dto.getProjectedDate());
+        goal.setColorHex(dto.getColorHex());
+        goal.setIsCompleted(dto.getIsCompleted() != null ? dto.getIsCompleted() : false);
+        goal.setAiSuggestion(dto.getAiSuggestion());
+
+        Goal updatedGoal = planPort.saveAllGoals(List.of(goal)).get(0);
+        return mapGoalToDTO(updatedGoal);
+    }
+
+    @Override
+    @Transactional
+    public void deleteGoal(String goalId) {
+        Goal goal = planPort.loadGoal(goalId)
+                .orElseThrow(com.holytrinity.expenso.shared.exception.NotFoundException::new);
+        checkGoalOwnership(goal);
+        goal.setDeleted(true);
+        planPort.saveAllGoals(List.of(goal));
+    }
+
+    @Override
+    @Transactional
+    public void deleteBulkGoals(List<String> goalIds) {
+        goalIds.forEach(id -> {
+            planPort.loadGoal(id).ifPresent(goal -> {
+                deleteGoal(goal.getGoalId());
+            });
+        });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<SubscriptionDTO> findAllSubscriptions(org.springframework.data.domain.Pageable pageable) {
+        return planPort.findAllSubscriptions(pageable).map(this::mapSubscriptionToDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SubscriptionDTO getSubscription(String subscriptionId) {
+        Subscription subscription = planPort.loadSubscription(subscriptionId)
+                .orElseThrow(com.holytrinity.expenso.shared.exception.NotFoundException::new);
+        checkSubscriptionOwnership(subscription);
+        return mapSubscriptionToDTO(subscription);
+    }
+
+    @Override
+    @Transactional
+    public SubscriptionDTO updateSubscription(String subscriptionId, SubscriptionDTO dto) {
+        Subscription subscription = planPort.loadSubscription(subscriptionId)
+                .orElseThrow(com.holytrinity.expenso.shared.exception.NotFoundException::new);
+        checkSubscriptionOwnership(subscription);
+
+        subscription.setName(dto.getName());
+        subscription.setMerchant(dto.getMerchant());
+        subscription.setAmount(dto.getAmount());
+        subscription.setRenewalDate(dto.getRenewalDate());
+        subscription.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
+        subscription.setColorHex(dto.getColorHex());
+
+        Subscription updatedSub = planPort.saveAllSubscriptions(List.of(subscription)).get(0);
+        return mapSubscriptionToDTO(updatedSub);
+    }
+
+    @Override
+    @Transactional
+    public void deleteSubscription(String subscriptionId) {
+        Subscription subscription = planPort.loadSubscription(subscriptionId)
+                .orElseThrow(com.holytrinity.expenso.shared.exception.NotFoundException::new);
+        checkSubscriptionOwnership(subscription);
+        subscription.setDeleted(true);
+        planPort.saveAllSubscriptions(List.of(subscription));
+    }
+
+    @Override
+    @Transactional
+    public void deleteBulkSubscriptions(List<String> subscriptionIds) {
+        subscriptionIds.forEach(id -> {
+            planPort.loadSubscription(id).ifPresent(sub -> {
+                deleteSubscription(sub.getSubscriptionId());
+            });
+        });
+    }
+
+    private GoalDTO mapGoalToDTO(Goal g) {
+        return GoalDTO.builder()
+                .goalId(g.getGoalId())
+                .version(g.getVersion())
+                .deleted(g.getDeleted())
+                .name(g.getName())
+                .currentAmount(g.getCurrentAmount())
+                .targetAmount(g.getTargetAmount())
+                .projectedDate(g.getProjectedDate())
+                .colorHex(g.getColorHex())
+                .isCompleted(g.getIsCompleted())
+                .aiSuggestion(g.getAiSuggestion())
+                .userId(g.getUser().getUserId())
+                .dateCreated(g.getGoalDateCreated())
+                .lastUpdated(g.getGoalLastUpdated())
+                .build();
+    }
+
+    private SubscriptionDTO mapSubscriptionToDTO(Subscription s) {
+        return SubscriptionDTO.builder()
+                .subscriptionId(s.getSubscriptionId())
+                .version(s.getVersion())
+                .deleted(s.getDeleted())
+                .name(s.getName())
+                .merchant(s.getMerchant())
+                .amount(s.getAmount())
+                .renewalDate(s.getRenewalDate())
+                .isActive(s.getIsActive())
+                .colorHex(s.getColorHex())
+                .userId(s.getUser().getUserId())
+                .dateCreated(s.getSubscriptionDateCreated())
+                .lastUpdated(s.getSubscriptionLastUpdated())
+                .build();
+    }
+
+    private void checkGoalOwnership(Goal goal) {
+        String currentUserId = userContext.getCurrentUserId();
+        if (!goal.getUser().getUserId().equals(currentUserId)) {
+            throw new com.holytrinity.expenso.shared.exception.NotFoundException();
+        }
+    }
+
+    private void checkSubscriptionOwnership(Subscription sub) {
+        String currentUserId = userContext.getCurrentUserId();
+        if (!sub.getUser().getUserId().equals(currentUserId)) {
+            throw new com.holytrinity.expenso.shared.exception.NotFoundException();
+        }
     }
 
     @Override
@@ -33,7 +192,8 @@ public class PlanApplicationService implements PlanUseCase {
         User user = userPort.loadUser(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
 
-        List<Goal> existingGoals = planPort.findGoalsByUserId(userId);
+        List<String> incomingIds = incomingGoals.stream().map(GoalDTO::getGoalId).collect(Collectors.toList());
+        List<Goal> existingGoals = incomingIds.isEmpty() ? new ArrayList<>() : planPort.findGoalsWithDeletedByIdsAndUserId(incomingIds, userId);
         Map<String, Goal> existingGoalMap = existingGoals.stream()
                 .collect(Collectors.toMap(Goal::getGoalId, g -> g));
 
@@ -86,7 +246,8 @@ public class PlanApplicationService implements PlanUseCase {
         User user = userPort.loadUser(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
 
-        List<Subscription> existingSubscriptions = planPort.findSubscriptionsByUserId(userId);
+        List<String> incomingIds = incomingSubscriptions.stream().map(SubscriptionDTO::getSubscriptionId).collect(Collectors.toList());
+        List<Subscription> existingSubscriptions = incomingIds.isEmpty() ? new ArrayList<>() : planPort.findSubscriptionsWithDeletedByIdsAndUserId(incomingIds, userId);
         Map<String, Subscription> existingSubMap = existingSubscriptions.stream()
                 .collect(Collectors.toMap(Subscription::getSubscriptionId, s -> s));
 

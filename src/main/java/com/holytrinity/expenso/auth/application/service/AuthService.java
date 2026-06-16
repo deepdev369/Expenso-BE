@@ -38,6 +38,7 @@ import com.holytrinity.expenso.auth.application.dto.PhoneVerifyRequest;
 import com.holytrinity.expenso.auth.application.dto.SignupRequest;
 import com.holytrinity.expenso.auth.application.dto.EmailAuthRequest;
 import com.holytrinity.expenso.auth.application.dto.EmailVerifyRequest;
+import com.holytrinity.expenso.auth.application.dto.EmailCheckResponse;
 import com.holytrinity.expenso.auth.application.port.out.EmailProviderPort;
 
 @Service
@@ -110,12 +111,29 @@ public class AuthService {
             ? "Expenso User" 
             : request.getUserName();
 
+        Optional<User> existingUser = userRepository.findByEmail(request.getEmail());
+        if (existingUser.isPresent()) {
+            User user = existingUser.get();
+            if (user.getAuthProviders().contains("LOCAL")) {
+                throw new RuntimeException("Email already registered. Please log in.");
+            } else {
+                // Link account by adding LOCAL provider and setting password
+                user.getAuthProviders().add("LOCAL");
+                user.setPasswordHash(passwordEncoder.encode(request.getPasswordHash()));
+                userRepository.save(user);
+                
+                UserDetails userDetails = userDetailsService.loadUserByUsername(request.getEmail());
+                return buildAuthResponse(userDetails, user.getUserId(), false);
+            }
+        }
+
         UserDTO userDTO = new UserDTO();
         userDTO.setEmail(request.getEmail());
         userDTO.setPasswordHash(passwordEncoder.encode(request.getPasswordHash()));
         userDTO.setUserName(userName);
         userDTO.setAuthProviders(Collections.singletonList("LOCAL"));
         userDTO.setEmailVerified(false);
+        userDTO.setProfileCompleted(false);
         userDTO.setDefaultCurrency("USD");
         userDTO.setLanguage("en");
         userDTO.setSmsConsentGranted(false);
@@ -297,6 +315,14 @@ public class AuthService {
         
         user.setEmailVerified(true);
         userRepository.save(user);
+    }
+
+    public EmailCheckResponse checkEmailExists(String email) {
+        Optional<User> user = userRepository.findByEmail(email);
+        if (user.isPresent()) {
+            return new EmailCheckResponse(true, user.get().getAuthProviders());
+        }
+        return new EmailCheckResponse(false, Collections.emptyList());
     }
 }
 

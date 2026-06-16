@@ -50,6 +50,9 @@ public class User {
         private Boolean emailVerified;
 
         @Column(nullable = false)
+        private Boolean profileCompleted = false;
+
+        @Column(nullable = false)
         private String defaultCurrency;
 
         @Column(nullable = false)

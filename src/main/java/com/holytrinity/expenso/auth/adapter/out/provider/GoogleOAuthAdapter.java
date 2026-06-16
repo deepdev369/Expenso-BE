@@ -28,16 +28,8 @@ public class GoogleOAuthAdapter implements OAuthProviderPort {
                 .build();
     }
 
-    @Override
-    public OAuthIdentity extractAndVerify(String token) {
-        if ("mock_google_token".equals(token)) {
-            return OAuthIdentity.builder()
-                    .subjectId("mock_google_subject_12345")
-                    .email("mock_google_user@gmail.com")
-                    .name("Mock Google User")
-                    .pictureUrl("")
-                    .build();
-        }
+  @Override
+  public OAuthIdentity extractAndVerify(String token) {
         try {
             GoogleIdToken idToken = verifier.verify(token);
             if (idToken != null) {

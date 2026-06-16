@@ -48,4 +48,9 @@ public class ExpensePersistenceAdapter implements ExpensePort {
             String userId, org.springframework.data.domain.Pageable pageable) {
         return expenseRepository.findByUserUserIdAndDeletedFalse(userId, pageable);
     }
+
+    @Override
+    public List<Expense> findAllWithDeletedByIdsAndUserId(List<String> ids, String userId) {
+        return expenseRepository.findAllWithDeletedByIdsAndUserId(ids, userId);
+    }
 }

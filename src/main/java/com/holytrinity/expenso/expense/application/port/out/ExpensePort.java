@@ -19,4 +19,6 @@ public interface ExpensePort {
     Expense saveExpense(Expense expense);
 
     void deleteExpense(Expense expense);
+
+    List<Expense> findAllWithDeletedByIdsAndUserId(List<String> ids, String userId);
 }

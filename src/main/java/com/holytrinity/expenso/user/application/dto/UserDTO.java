@@ -36,6 +36,9 @@ public class UserDTO {
     private Boolean emailVerified;
 
     @NotNull
+    private Boolean profileCompleted = false;
+
+    @NotNull
     @Size(max = 255)
     private String defaultCurrency;
 

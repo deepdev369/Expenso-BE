@@ -13,9 +13,13 @@ import com.holytrinity.expenso.auth.application.dto.EmailVerifyRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import com.holytrinity.expenso.auth.application.dto.EmailCheckResponse;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -61,6 +65,11 @@ public class AuthController {
     public ResponseEntity<Void> verifyEmailOtp(@RequestBody @Valid EmailVerifyRequest request) {
         authService.verifyEmailOtp(request);
         return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/email/check")
+    public ResponseEntity<EmailCheckResponse> checkEmailExists(@RequestParam String email) {
+        return ResponseEntity.ok(authService.checkEmailExists(email));
     }
 
     @PostMapping("/refresh")

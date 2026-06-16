@@ -127,6 +127,7 @@ public class UserApplicationService implements UserUseCase {
         userDTO.setAuthProviders(user.getAuthProviders());
         userDTO.setPasswordHash(user.getPasswordHash());
         userDTO.setEmailVerified(user.getEmailVerified());
+        userDTO.setProfileCompleted(user.getProfileCompleted());
         userDTO.setDefaultCurrency(user.getDefaultCurrency());
         userDTO.setLanguage(user.getLanguage());
         userDTO.setCategoriesMapping(user.getCategoriesMapping());
@@ -145,6 +146,9 @@ public class UserApplicationService implements UserUseCase {
         user.setAuthProviders(userDTO.getAuthProviders());
         user.setPasswordHash(userDTO.getPasswordHash());
         user.setEmailVerified(userDTO.getEmailVerified());
+        if (userDTO.getProfileCompleted() != null) {
+            user.setProfileCompleted(userDTO.getProfileCompleted());
+        }
         user.setDefaultCurrency(userDTO.getDefaultCurrency());
         user.setLanguage(userDTO.getLanguage());
         user.setCategoriesMapping(userDTO.getCategoriesMapping());

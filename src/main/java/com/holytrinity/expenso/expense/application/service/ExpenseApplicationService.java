@@ -88,15 +88,32 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     @Transactional
     public List<ExpenseDTO> processBulk(List<ExpenseDTO> expenseDTOs) {
         log.info("Processing bulk expenses: {} items", expenseDTOs.size());
-        return expenseDTOs.stream().map(dto -> {
-            java.util.Optional<Expense> existing = expensePort
-                    .loadExpense(dto.getExpenseId());
-            if (existing.isEmpty()) {
-                return create(dto);
+        String currentUserId = userContext.getCurrentUserId();
+        
+        List<String> incomingIds = expenseDTOs.stream().map(ExpenseDTO::getExpenseId).toList();
+        List<Expense> existingExpenses = incomingIds.isEmpty() ? new java.util.ArrayList<>() : expensePort.findAllWithDeletedByIdsAndUserId(incomingIds, currentUserId);
+        java.util.Map<String, Expense> existingExpenseMap = existingExpenses.stream()
+                .collect(java.util.stream.Collectors.toMap(Expense::getExpenseId, e -> e));
+
+        List<ExpenseDTO> results = new java.util.ArrayList<>();
+        for (ExpenseDTO dto : expenseDTOs) {
+            Expense existing = existingExpenseMap.get(dto.getExpenseId());
+            if (existing == null) {
+                // Must ensure the DTO has the user ID so create() uses it correctly
+                dto.setUserID(currentUserId);
+                results.add(create(dto));
             } else {
-                return update(existing.get().getExpenseId(), dto);
+                if (dto.getVersion() != null && dto.getVersion() < existing.getVersion()) {
+                    log.info("Ignoring stale update from client for expense {}, server version: {}, client version: {}", 
+                             existing.getExpenseId(), existing.getVersion(), dto.getVersion());
+                    results.add(mapToDTO(existing));
+                } else {
+                    dto.setUserID(currentUserId);
+                    results.add(update(existing.getExpenseId(), dto));
+                }
             }
-        }).toList();
+        }
+        return results;
     }
 
     @Override
@@ -250,8 +267,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             }
         } else {
             expense = new Expense();
-            // Always generate server-side ID — never trust client-provided IDs
-            expense.setExpenseId(java.util.UUID.randomUUID().toString());
+            expense.setExpenseId(expenseDTO.getExpenseId() != null ? expenseDTO.getExpenseId() : java.util.UUID.randomUUID().toString());
         }
 
         expense.setAmount(expenseDTO.getAmount());

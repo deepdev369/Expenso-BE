@@ -11,4 +11,6 @@ public interface AssociatedUserPort {
     AssociatedUser saveAssociatedUser(AssociatedUser associatedUser);
 
     void deleteAssociatedUser(AssociatedUser associatedUser);
+
+    java.util.List<AssociatedUser> findAllWithDeletedByIdsAndUserId(java.util.List<String> ids, String userId);
 }

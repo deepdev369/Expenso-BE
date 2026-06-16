@@ -31,13 +31,17 @@ public class AssociatedUserApplicationService implements AssociatedUserUseCase {
         String currentUserId = userContext.getCurrentUserId();
         User currentUser = userPort.loadUser(currentUserId).orElseThrow(NotFoundException::new);
 
+        List<String> incomingIds = dtos.stream().map(AssociatedUserDTO::getAssociatedUserId).toList();
+        List<AssociatedUser> existingUsers = incomingIds.isEmpty() ? new java.util.ArrayList<>() : associatedUserPort.findAllWithDeletedByIdsAndUserId(incomingIds, currentUserId);
+        java.util.Map<String, AssociatedUser> existingUserMap = existingUsers.stream()
+                .collect(java.util.stream.Collectors.toMap(AssociatedUser::getAssociatedUserId, u -> u));
+
         return dtos.stream().map(dto -> {
-            Optional<AssociatedUser> existing = associatedUserPort
-                    .loadAssociatedUser(dto.getAssociatedUserId());
-            if (existing.isPresent()) {
-                checkOwnership(existing.get());
+            AssociatedUser existing = existingUserMap.get(dto.getAssociatedUserId());
+            if (existing != null) {
+                checkOwnership(existing);
             }
-            AssociatedUser entity = existing.orElseGet(AssociatedUser::new);
+            AssociatedUser entity = existing != null ? existing : new AssociatedUser();
             mapToEntity(dto, entity);
             entity.setUser(currentUser);
 

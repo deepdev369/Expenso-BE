@@ -17,17 +17,48 @@ import java.util.List;
 public class SplitController {
 
     private final SplitUseCase splitUseCase;
+    private final com.holytrinity.expenso.security.UserContext userContext;
 
-    public SplitController(SplitUseCase splitUseCase) {
+    public SplitController(SplitUseCase splitUseCase, com.holytrinity.expenso.security.UserContext userContext) {
         this.splitUseCase = splitUseCase;
+        this.userContext = userContext;
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping
+    public ResponseEntity<org.springframework.data.domain.Page<SplitDTO>> getAll(
+            @org.springframework.data.web.PageableDefault(size = 20) org.springframework.data.domain.Pageable pageable) {
+        return ResponseEntity.ok(splitUseCase.findAll(pageable));
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/{splitId}")
+    public ResponseEntity<SplitDTO> getSplit(@org.springframework.web.bind.annotation.PathVariable(name = "splitId") final String splitId) {
+        return ResponseEntity.ok(splitUseCase.get(splitId));
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/{splitId}")
+    public ResponseEntity<SplitDTO> updateSplit(
+            @org.springframework.web.bind.annotation.PathVariable(name = "splitId") final String splitId, 
+            @RequestBody @jakarta.validation.Valid final SplitDTO splitDTO) {
+        return ResponseEntity.ok(splitUseCase.update(splitId, splitDTO));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{splitId}")
+    public ResponseEntity<Void> deleteSplit(@org.springframework.web.bind.annotation.PathVariable(name = "splitId") final String splitId) {
+        splitUseCase.delete(splitId);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/sync")
     public ResponseEntity<List<SplitDTO>> syncSplits(
-            @AuthenticationPrincipal Jwt jwt,
-            @RequestBody List<SplitDTO> incomingSplits) {
-        String userId = jwt.getSubject();
+            @RequestBody @jakarta.validation.Valid List<SplitDTO> incomingSplits) {
+        String userId = userContext.getCurrentUserId();
         List<SplitDTO> updatedSplits = splitUseCase.processBulkSplits(userId, incomingSplits);
         return ResponseEntity.ok(updatedSplits);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/sync")
+    public ResponseEntity<Void> deleteBulk(@RequestBody final List<String> splitIds) {
+        splitUseCase.deleteBulk(splitIds);
+        return ResponseEntity.noContent().build();
     }
 }
