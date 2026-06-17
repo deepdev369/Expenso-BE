@@ -35,30 +35,47 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         String email = oAuth2User.getAttribute("email");
         String name = oAuth2User.getAttribute("name");
 
+        if (email == null || email.isBlank()) {
+            log.error("OAuth2 login failed: email is missing from OAuth provider.");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Email is required from OAuth provider");
+            return;
+        }
+
+        if (name == null || name.isBlank()) {
+            name = "User"; // Fallback if name is missing
+        }
+
         log.info("OAuth2 Success for email: {}", email);
 
         // Check if user exists, if not create
         if (!userPort.existsByEmail(email)) {
-            UserDTO newUser = new UserDTO();
-            newUser.setUserId(java.util.UUID.randomUUID().toString());
-            newUser.setEmail(email);
-            newUser.setUserName(name);
-            newUser.setEmailVerified(true); // Assumed verified from OAuth
-            newUser.setAuthProviders(Collections.singletonList("GOOGLE"));
-            newUser.setDefaultCurrency("USD"); // Default
-            newUser.setLanguage("en"); // Default
-            newUser.setSmsConsentGranted(false);
-            newUser.setVoiceConsentGranted(false);
-            userUseCase.syncBulk(Collections.singletonList(newUser));
+            try {
+                UserDTO newUser = new UserDTO();
+                newUser.setUserId(java.util.UUID.randomUUID().toString());
+                newUser.setEmail(email);
+                newUser.setUserName(name);
+                newUser.setEmailVerified(true); // Assumed verified from OAuth
+                newUser.setAuthProviders(Collections.singletonList(com.holytrinity.expenso.auth.application.dto.AuthProvider.GOOGLE.name()));
+                newUser.setDefaultCurrency(null); // Default
+                newUser.setLanguage("en"); // Default
+                newUser.setSmsConsentGranted(false);
+                newUser.setVoiceConsentGranted(false);
+                userUseCase.syncBulk(Collections.singletonList(newUser));
+            } catch (Exception e) {
+                log.error("Failed to create new user from OAuth2 login for email: {}", email, e);
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "User creation failed");
+                return;
+            }
         }
 
         // Generate Token
         // Load genuine UserDetails from the database
-        org.springframework.security.core.userdetails.UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+        org.springframework.security.core.userdetails.UserDetails userDetails = userDetailsService
+                .loadUserByUsername(email);
 
         String token = jwtUtils.generateToken(userDetails);
 
-        // Redirect to the configured frontend URL with the token
-        response.sendRedirect(redirectUrl + "?token=" + token);
+        // Redirect to the configured frontend URL with the token as a URL fragment
+        response.sendRedirect(redirectUrl + "#token=" + token);
     }
 }

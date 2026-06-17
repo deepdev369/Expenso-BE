@@ -34,6 +34,7 @@ public class InternalTokenFilter extends OncePerRequestFilter {
             String token = request.getHeader("X-Internal-Token");
             if (token == null || !constantTimeEquals(token, configuredToken)) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("text/plain");
                 response.getWriter().write("Invalid or missing X-Internal-Token");
                 return;
             }
@@ -41,11 +42,13 @@ public class InternalTokenFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    /** Constant-time string comparison — prevents timing oracle attacks on the token. */
+    /**
+     * Constant-time string comparison — prevents timing oracle attacks on the
+     * token.
+     */
     private boolean constantTimeEquals(String a, String b) {
         return java.security.MessageDigest.isEqual(
                 a.getBytes(StandardCharsets.UTF_8),
-                b.getBytes(StandardCharsets.UTF_8)
-        );
+                b.getBytes(StandardCharsets.UTF_8));
     }
 }
