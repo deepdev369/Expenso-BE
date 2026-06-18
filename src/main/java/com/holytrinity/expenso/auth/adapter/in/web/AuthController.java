@@ -2,7 +2,7 @@ package com.holytrinity.expenso.auth.adapter.in.web;
 
 import com.holytrinity.expenso.auth.application.dto.AuthRequest;
 import com.holytrinity.expenso.auth.application.dto.AuthResponse;
-import com.holytrinity.expenso.auth.application.service.AuthService;
+import com.holytrinity.expenso.auth.application.port.in.AuthUseCase;
 import com.holytrinity.expenso.auth.application.dto.GoogleOAuthRequest;
 import com.holytrinity.expenso.auth.application.dto.PhoneAuthRequest;
 import com.holytrinity.expenso.auth.application.dto.PhoneVerifyRequest;
@@ -20,60 +20,58 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.holytrinity.expenso.auth.application.dto.EmailCheckResponse;
-import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService authService;
+    private final AuthUseCase authUseCase;
 
     @PostMapping("/signup")
     public ResponseEntity<AuthResponse> register(@RequestBody @Valid SignupRequest request) {
-        return ResponseEntity.ok(authService.register(request));
+        return ResponseEntity.ok(authUseCase.register(request));
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> authenticate(@RequestBody @Valid AuthRequest request) {
-        return ResponseEntity.ok(authService.authenticate(request));
+        return ResponseEntity.ok(authUseCase.authenticate(request));
     }
 
     @PostMapping("/oauth/google")
     public ResponseEntity<AuthResponse> authenticateGoogle(@RequestBody @Valid GoogleOAuthRequest request) {
-        return ResponseEntity.ok(authService.authenticateGoogle(request));
+        return ResponseEntity.ok(authUseCase.authenticateGoogle(request));
     }
 
     @PostMapping("/phone/send-otp")
     public ResponseEntity<Void> sendPhoneOtp(@RequestBody @Valid PhoneAuthRequest request) {
-        authService.sendPhoneOtp(request);
+        authUseCase.sendPhoneOtp(request);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/phone/verify-otp")
     public ResponseEntity<AuthResponse> verifyPhoneOtp(@RequestBody @Valid PhoneVerifyRequest request) {
-        return ResponseEntity.ok(authService.verifyPhoneOtp(request));
+        return ResponseEntity.ok(authUseCase.verifyPhoneOtp(request));
     }
-
     @PostMapping("/email/send-verification")
     public ResponseEntity<Void> sendEmailVerification(@RequestBody @Valid EmailAuthRequest request) {
-        authService.sendEmailVerification(request);
+        authUseCase.sendEmailVerification(request);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/email/verify")
     public ResponseEntity<Void> verifyEmailOtp(@RequestBody @Valid EmailVerifyRequest request) {
-        authService.verifyEmailOtp(request);
+        authUseCase.verifyEmailOtp(request);
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/email/check")
     public ResponseEntity<EmailCheckResponse> checkEmailExists(@RequestParam String email) {
-        return ResponseEntity.ok(authService.checkEmailExists(email));
+        return ResponseEntity.ok(authUseCase.checkEmailExists(email));
     }
 
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refreshToken(@RequestBody @Valid RefreshRequest request) {
-        return ResponseEntity.ok(authService.refreshToken(request));
+        return ResponseEntity.ok(authUseCase.refreshToken(request));
     }
 }
