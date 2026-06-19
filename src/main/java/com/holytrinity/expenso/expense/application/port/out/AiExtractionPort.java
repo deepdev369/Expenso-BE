@@ -2,6 +2,8 @@ package com.holytrinity.expenso.expense.application.port.out;
 
 import com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 public interface AiExtractionPort {
-    void submitExpenseForExtraction(AiExtractionRequest request);
+    JsonNode submitExpenseForExtraction(AiExtractionRequest request);
 }

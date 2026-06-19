@@ -4,6 +4,7 @@ import com.holytrinity.expenso.events.BeforeDeleteUser;
 import com.holytrinity.expenso.expense.application.dto.ExpenseDTO;
 import com.holytrinity.expenso.expense.application.port.in.ExpenseUseCase;
 import com.holytrinity.expenso.expense.application.port.out.ExpensePort;
+import com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest;
 import com.holytrinity.expenso.expense.domain.Expense;
 import com.holytrinity.expenso.user.application.port.out.UserPort;
 import com.holytrinity.expenso.user.domain.User;
@@ -140,7 +141,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     }
 
     @Override
-    public void submitForExtraction(org.springframework.web.multipart.MultipartFile file, String text,
+    public ExpenseDTO submitForExtraction(org.springframework.web.multipart.MultipartFile file, String text,
             String expenseId) {
         String currentUserId = userContext.getCurrentUserId();
         User currentUser = userPort.loadUser(currentUserId)
@@ -151,7 +152,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
                     .orElseThrow(() -> new NotFoundException("Expense not found"));
             checkOwnership(existing);
         }
-        com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest request = com.holytrinity.expenso.expense.application.port.out.dto.AiExtractionRequest
+        AiExtractionRequest request = AiExtractionRequest
                 .builder()
                 .userId(currentUserId)
                 .expenseId(expenseId)
@@ -161,96 +162,80 @@ public class ExpenseApplicationService implements ExpenseUseCase {
                 .userLanguage(currentUser.getLanguage())
                 .categoriesMapping(currentUser.getCategoriesMapping())
                 .paymentMethods(currentUser.getPaymentMethods())
-                .webhookUrl(webhookBaseUrl + "/api/v1/webhook/expense-ai")
                 .build();
-        aiExtractionPort.submitExpenseForExtraction(request);
+        
+        com.fasterxml.jackson.databind.JsonNode payload = aiExtractionPort.submitExpenseForExtraction(request);
+        return processAiExtractionResult(payload, currentUserId, expenseId);
     }
 
-    @Override
-    @Transactional
-    public void handleExtractionCallback(com.fasterxml.jackson.databind.JsonNode payload) {
-        log.info("Received Webhook from AI Microservice. Status: {}", payload.path("status").asText());
+    private ExpenseDTO processAiExtractionResult(com.fasterxml.jackson.databind.JsonNode payload, String currentUserId, String providedExpenseId) {
+        log.info("Received AI Extraction Result. Status: {}", payload.path("status").asText());
 
         String status = payload.path("status").asText("");
         boolean success = "COMPLETED".equals(status);
 
-        if (success) {
-            // The AI payload structure: { status, job_id, result: { extracted_data: [...], ... } }
-            com.fasterxml.jackson.databind.JsonNode result = payload.path("result");
-            com.fasterxml.jackson.databind.JsonNode extractedList = result.path("extracted_data");
-
-            if (extractedList.isArray() && extractedList.size() > 0) {
-                // Process the first extracted expense (primary transaction)
-                com.fasterxml.jackson.databind.JsonNode data = extractedList.get(0);
-
-                ExpenseDTO dto = new ExpenseDTO();
-                dto.setAmount(data.path("amount").asDouble(0.0));
-                dto.setCategory(data.path("category").asText(null));
-                dto.setSubCategory(data.path("sub_category").asText(null));
-
-                // AI sends "payment_method" (not "payment_mode")
-                String paymentMethod = data.path("payment_method").asText(null);
-                dto.setPaymentMode(paymentMethod);
-
-                // AI sends "merchant" (not "merchant_name")
-                String merchant = data.path("merchant").asText(null);
-                dto.setMerchantName(merchant);
-
-                // AI sends is_debit boolean (not transaction_type string)
-                boolean isDebit = data.path("is_debit").asBoolean(true);
-                dto.setTransactionType(isDebit ? "DEBIT" : "CREDIT");
-
-                // Parse date — AI sends YYYY-MM-DD string
-                if (data.path("date").isTextual() && !data.path("date").asText().isBlank()) {
-                    try {
-                        java.time.LocalDate ld = java.time.LocalDate.parse(data.path("date").asText());
-                        dto.setExpenseDate(ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli());
-                    } catch (Exception e) {
-                        dto.setExpenseDate(System.currentTimeMillis());
-                    }
-                } else if (data.path("date").isNumber()) {
-                    dto.setExpenseDate(data.path("date").asLong(System.currentTimeMillis()));
-                } else {
-                    dto.setExpenseDate(System.currentTimeMillis());
-                }
-
-                dto.setStatus("PROCESSED_BY_AI");
-
-                // Resolve user_id — check both top-level and nested data
-                String userId = result.path("user_id").asText(null);
-                if (userId == null || userId.isBlank()) {
-                    userId = payload.path("user_id").asText(null);
-                }
-                if (userId == null || userId.isBlank() || "0".equals(userId)) {
-                    log.error("Webhook rejected: Missing or invalid user_id in AI payload");
-                    return;
-                }
-                dto.setUserID(userId);
-
-                // Prefer expenseId from the top-level payload if provided by BE
-                String expenseId = payload.path("expenseId").asText(null);
-                if (expenseId != null && expenseId.isBlank()) expenseId = null;
-                dto.setExpenseId(expenseId);
-
-                handleWebhookCreateInternal(dto, userId);
-            } else {
-                log.warn("AI webhook received COMPLETED status but extracted_data is empty or missing");
-            }
-        } else {
+        if (!success) {
             log.error("AI Microservice reported extraction failure: {}", payload.path("error").asText());
-            String expenseId = payload.path("expenseId").asText(null);
-            if (expenseId != null && !expenseId.isBlank() && !"null".equals(expenseId)) {
-                expensePort.loadExpense(expenseId).ifPresent(expense -> {
+            if (providedExpenseId != null && !providedExpenseId.isBlank()) {
+                expensePort.loadExpense(providedExpenseId).ifPresent(expense -> {
                     expense.setStatus("FAILED_EXTRACTION");
                     expensePort.saveExpense(expense);
-                    log.info("Updated expense {} status to FAILED_EXTRACTION", expenseId);
                 });
             }
+            throw new RuntimeException("AI Extraction failed: " + payload.path("error").asText());
         }
+
+        com.fasterxml.jackson.databind.JsonNode result = payload.path("result");
+        com.fasterxml.jackson.databind.JsonNode extractedList = result.path("extracted_data");
+
+        if (!extractedList.isArray() || extractedList.size() == 0) {
+            throw new RuntimeException("AI extraction returned COMPLETED but no data was found");
+        }
+
+        com.fasterxml.jackson.databind.JsonNode data = extractedList.get(0);
+
+        ExpenseDTO dto = new ExpenseDTO();
+        dto.setAmount(data.path("amount").asDouble(0.0));
+        dto.setCategory(data.path("category").asText(null));
+        dto.setSubCategory(data.path("sub_category").asText(null));
+
+        String paymentMethod = data.path("payment_method").asText(null);
+        dto.setPaymentMode(paymentMethod);
+
+        String merchant = data.path("merchant").asText(null);
+        dto.setMerchantName(merchant);
+
+        boolean isDebit = data.path("is_debit").asBoolean(true);
+        dto.setTransactionType(isDebit ? "DEBIT" : "CREDIT");
+
+        if (data.path("date").isTextual() && !data.path("date").asText().isBlank()) {
+            try {
+                java.time.LocalDate ld = java.time.LocalDate.parse(data.path("date").asText());
+                dto.setExpenseDate(ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli());
+            } catch (Exception e) {
+                dto.setExpenseDate(System.currentTimeMillis());
+            }
+        } else if (data.path("date").isNumber()) {
+            dto.setExpenseDate(data.path("date").asLong(System.currentTimeMillis()));
+        } else {
+            dto.setExpenseDate(System.currentTimeMillis());
+        }
+
+        dto.setStatus("PROCESSED_BY_AI");
+        dto.setUserID(currentUserId);
+        
+        String expenseId = payload.path("expenseId").asText(null);
+        if (expenseId == null || expenseId.isBlank()) {
+            expenseId = providedExpenseId;
+        }
+        if (expenseId != null && expenseId.isBlank()) expenseId = null;
+        dto.setExpenseId(expenseId);
+
+        return saveExtractedExpense(dto, currentUserId);
     }
 
-    private void handleWebhookCreateInternal(ExpenseDTO expenseDTO, String assignedUserId) {
-        log.info("Creating internal AI expense for assigned user: {}", assignedUserId);
+    private ExpenseDTO saveExtractedExpense(ExpenseDTO expenseDTO, String assignedUserId) {
+        log.info("Saving AI expense for user: {}", assignedUserId);
 
         java.util.Optional<Expense> existingOpt = expenseDTO.getExpenseId() != null
             ? expensePort.loadExpense(expenseDTO.getExpenseId())
@@ -260,10 +245,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         if (existingOpt.isPresent()) {
             expense = existingOpt.get();
             if (!expense.getUser().getUserId().equals(assignedUserId)) {
-                log.error("Webhook IDOR attempt! Expense {} does not belong to assigned user {}",
-                    expenseDTO.getExpenseId(), assignedUserId);
-                throw new org.springframework.security.access.AccessDeniedException(
-                    "Cannot overwrite another user's expense via webhook");
+                throw new org.springframework.security.access.AccessDeniedException("Cannot overwrite another user's expense");
             }
         } else {
             expense = new Expense();
@@ -286,8 +268,8 @@ public class ExpenseApplicationService implements ExpenseUseCase {
                 .orElseThrow(() -> new NotFoundException("User not found: " + assignedUserId));
         expense.setUser(user);
 
-        expensePort.saveExpense(expense);
-        log.info("AI Expense saved internally via webhook for user {}", assignedUserId);
+        Expense saved = expensePort.saveExpense(expense);
+        return mapToDTO(saved);
     }
 
     private ExpenseDTO mapToDTO(Expense expense) {

@@ -64,12 +64,12 @@ public class ExpenseController {
     }
 
     @PostMapping(value = "/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ApiResponse(responseCode = "202", description = "Accepted for processing")
-    public ResponseEntity<Void> extractExpense(
+    @ApiResponse(responseCode = "200", description = "Extracted successfully")
+    public ResponseEntity<ExpenseDTO> extractExpense(
             @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "text", required = false) String text,
             @RequestParam(value = "expenseId", required = true) String expenseId) {
-        expenseUseCase.submitForExtraction(file, text, expenseId);
-        return ResponseEntity.accepted().build();
+        ExpenseDTO extractedExpense = expenseUseCase.submitForExtraction(file, text, expenseId);
+        return ResponseEntity.ok(extractedExpense);
     }
 }

@@ -46,7 +46,7 @@ public class AiExtractionAdapter implements AiExtractionPort {
     private TaskExecutor taskExecutor;
 
     @Override
-    public void submitExpenseForExtraction(AiExtractionRequest request) {
+    public com.fasterxml.jackson.databind.JsonNode submitExpenseForExtraction(AiExtractionRequest request) {
         RestClient restClient = restClientBuilder.baseUrl(baseUrl).build();
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -55,10 +55,6 @@ public class AiExtractionAdapter implements AiExtractionPort {
             body.add("expense_id", request.getExpenseId());
         }
 
-
-        if (request.getWebhookUrl() != null) {
-            body.add("webhook_url", request.getWebhookUrl());
-        }
         if (request.getRawText() != null) {
             body.add("raw_text", request.getRawText());
         }
@@ -94,28 +90,19 @@ public class AiExtractionAdapter implements AiExtractionPort {
             throw new RuntimeException("Failed to prepare multipart data for AI Service", e);
         }
 
-        log.info("Submitting expense extraction to AI for user {}, webhook: {}", request.getUserId(),
-                request.getWebhookUrl());
+        log.info("Submitting expense extraction to AI synchronously for user {}", request.getUserId());
 
-        CompletableFuture.runAsync(() -> {
-            try {
-                restClient.post()
-                        .uri("/api/v1/expense/extract")
-                        .header("X-Internal-Token", internalToken)
-                        .contentType(MediaType.MULTIPART_FORM_DATA)
-                        .body(body)
-                        .retrieve()
-                        .body(String.class); // Read string body
-            } catch (Exception e) {
-                log.error("Failed to submit request to AI Service", e);
-                ObjectNode payload = JsonNodeFactory.instance.objectNode();
-                payload.put("success", false);
-                payload.put("error", "HTTP request to AI service failed: " + e.getMessage());
-                if (request.getExpenseId() != null) {
-                    payload.put("expenseId", request.getExpenseId());
-                }
-                expenseUseCase.handleExtractionCallback(payload);
-            }
-        }, taskExecutor);
+        try {
+            return restClient.post()
+                    .uri("/api/v1/expense/extract")
+                    .header("X-Internal-Token", internalToken)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body)
+                    .retrieve()
+                    .body(com.fasterxml.jackson.databind.JsonNode.class);
+        } catch (Exception e) {
+            log.error("Failed to submit request to AI Service", e);
+            throw new RuntimeException("HTTP request to AI service failed: " + e.getMessage(), e);
+        }
     }
 }

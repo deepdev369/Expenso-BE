@@ -20,8 +20,6 @@ public interface ExpenseUseCase {
 
     void deleteBulk(List<String> expenseIds);
 
-    void submitForExtraction(MultipartFile file, String text, String expenseId);
-
-    void handleExtractionCallback(JsonNode payload);
+    ExpenseDTO submitForExtraction(MultipartFile file, String text, String expenseId);
 
 }
