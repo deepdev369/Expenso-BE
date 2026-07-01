@@ -6,7 +6,6 @@ import com.holytrinity.expenso.chat.application.dto.ChatResponseDTO;
 import com.holytrinity.expenso.chat.application.port.in.ChatUseCase;
 import com.holytrinity.expenso.expense.application.port.in.ExpenseUseCase;
 import com.holytrinity.expenso.expense.application.port.out.ExpensePort;
-import com.holytrinity.expenso.plan.application.port.out.PlanPort;
 import com.holytrinity.expenso.split.application.port.out.SplitPort;
 import com.holytrinity.expenso.user.application.port.out.UserPort;
 import lombok.extern.slf4j.Slf4j;
@@ -17,8 +16,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import com.holytrinity.expenso.expense.application.dto.ExpenseExtractionRequest;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @Slf4j
@@ -31,18 +32,16 @@ public class ChatApplicationService implements ChatUseCase {
     private String internalToken;
 
     private final ExpensePort expensePort;
-    private final PlanPort planPort;
     private final SplitPort splitPort;
     private final UserPort userPort;
     private final ObjectMapper objectMapper;
     private final RestClient restClient;
     private final ExpenseUseCase expenseUseCase;
 
-    public ChatApplicationService(ExpensePort expensePort, PlanPort planPort, SplitPort splitPort,
+    public ChatApplicationService(ExpensePort expensePort, SplitPort splitPort,
                                   UserPort userPort, ObjectMapper objectMapper, RestClient.Builder restClientBuilder,
                                   ExpenseUseCase expenseUseCase) {
         this.expensePort = expensePort;
-        this.planPort = planPort;
         this.splitPort = splitPort;
         this.userPort = userPort;
         this.objectMapper = objectMapper;
@@ -57,9 +56,7 @@ public class ChatApplicationService implements ChatUseCase {
         try {
             // Aggregate user context — ALWAYS scoped to the requesting user
             var expenses = expensePort.findAllByUserId(userId, PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "expenseDate"))).getContent();
-            var goals = planPort.findGoalsByUserId(userId);
             var splits = splitPort.findSplitsByUserId(userId);
-            var subscriptions = planPort.findSubscriptionsByUserId(userId);
 
             Map<String, Object> context = new HashMap<>();
             context.put("recent_expenses", expenses.stream().map(e -> Map.of(
@@ -67,15 +64,6 @@ public class ChatApplicationService implements ChatUseCase {
                     "category", e.getCategory(),
                     "date", e.getExpenseDate(),
                     "merchant", e.getMerchantName() != null ? e.getMerchantName() : ""
-            )).toList());
-            context.put("goals", goals.stream().map(g -> Map.of(
-                    "name", g.getName(),
-                    "current", g.getCurrentAmount(),
-                    "target", g.getTargetAmount()
-            )).toList());
-            context.put("subscriptions", subscriptions.stream().map(s -> Map.of(
-                    "name", s.getName(),
-                    "amount", s.getAmount()
             )).toList());
             context.put("splits", splits.stream().map(s -> Map.of(
                     "description", s.getDescription(),
@@ -105,7 +93,10 @@ public class ChatApplicationService implements ChatUseCase {
                 String intent = aiResponseNode.path("data").path("intent").asText("chat");
                 if ("extract_expense".equals(intent)) {
                     log.info("Detected extract_expense intent from AI chat. Submitting for extraction.");
-                    expenseUseCase.submitForExtraction(null, requestDTO.getPrompt(), null);
+                    ExpenseExtractionRequest extractionRequest = new ExpenseExtractionRequest();
+                    extractionRequest.setText(requestDTO.getPrompt());
+                    extractionRequest.setExpenseId(UUID.randomUUID().toString());
+                    expenseUseCase.submitForExtraction(extractionRequest);
                 }
                 return new ChatResponseDTO(aiMessage);
             } else {

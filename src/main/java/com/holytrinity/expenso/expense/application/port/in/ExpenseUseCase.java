@@ -5,6 +5,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.holytrinity.expenso.expense.application.dto.ExpenseDTO;
+import com.holytrinity.expenso.expense.application.dto.ExpenseExtractionRequest;
 import java.util.List;
 
 public interface ExpenseUseCase {
@@ -20,6 +21,6 @@ public interface ExpenseUseCase {
 
     void deleteBulk(List<String> expenseIds);
 
-    ExpenseDTO submitForExtraction(MultipartFile file, String text, String expenseId);
+    List<ExpenseDTO> submitForExtraction(ExpenseExtractionRequest request);
 
 }

@@ -12,6 +12,8 @@ import com.holytrinity.expenso.shared.exception.NotFoundException;
 import com.holytrinity.expenso.shared.exception.ReferencedException;
 import org.springframework.context.ApplicationEventPublisher;
 import com.holytrinity.expenso.events.BeforeDeleteExpense;
+import com.holytrinity.expenso.expense.application.dto.ExpenseExtractionRequest;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class ExpenseApplicationService implements ExpenseUseCase {
 
     private final ExpensePort expensePort;
@@ -30,6 +31,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     private final ApplicationEventPublisher publisher;
     private final com.holytrinity.expenso.security.UserContext userContext;
     private final com.holytrinity.expenso.expense.application.port.out.AiExtractionPort aiExtractionPort;
+    private final TransactionTemplate transactionTemplate;
 
     @org.springframework.beans.factory.annotation.Value("${app.webhook.base-url}")
     private String webhookBaseUrl;
@@ -104,7 +106,10 @@ public class ExpenseApplicationService implements ExpenseUseCase {
                 dto.setUserID(currentUserId);
                 results.add(create(dto));
             } else {
-                if (dto.getVersion() != null && dto.getVersion() < existing.getVersion()) {
+                if (existing.getDeleted()) {
+                    log.info("Ignoring update for soft-deleted expense: {}", existing.getExpenseId());
+                    results.add(mapToDTO(existing));
+                } else if (dto.getVersion() != null && dto.getVersion() < existing.getVersion()) {
                     log.info("Ignoring stale update from client for expense {}, server version: {}, client version: {}", 
                              existing.getExpenseId(), existing.getVersion(), dto.getVersion());
                     results.add(mapToDTO(existing));
@@ -121,11 +126,19 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     @Transactional
     public void deleteBulk(List<String> expenseIds) {
         log.info("Processing bulk delete for {} items", expenseIds.size());
-        expenseIds.forEach(id -> {
-            expensePort.loadExpense(id).ifPresent(expense -> {
-                delete(expense.getExpenseId());
-            });
-        });
+        if (expenseIds == null || expenseIds.isEmpty()) {
+            return;
+        }
+        String currentUserId = userContext.getCurrentUserId();
+        List<Expense> expenses = expensePort.findAllWithDeletedByIdsAndUserId(expenseIds, currentUserId);
+        for (Expense expense : expenses) {
+            if (!expense.getDeleted()) {
+                publisher.publishEvent(new BeforeDeleteExpense(expense.getExpenseId()));
+                expense.setDeleted(true);
+                expensePort.saveExpense(expense);
+            }
+        }
+        log.info("Bulk delete processed for {} items", expenseIds.size());
     }
 
 
@@ -141,34 +154,34 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     }
 
     @Override
-    public ExpenseDTO submitForExtraction(org.springframework.web.multipart.MultipartFile file, String text,
-            String expenseId) {
+    public List<ExpenseDTO> submitForExtraction(ExpenseExtractionRequest request) {
         String currentUserId = userContext.getCurrentUserId();
         User currentUser = userPort.loadUser(currentUserId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        if (expenseId != null && !expenseId.trim().isEmpty()) {
-            Expense existing = expensePort.loadExpense(expenseId)
+        String providedExpenseId = request.getExpenseId();
+        if (providedExpenseId != null && !providedExpenseId.trim().isEmpty()) {
+            Expense existing = expensePort.loadExpense(providedExpenseId)
                     .orElseThrow(() -> new NotFoundException("Expense not found"));
             checkOwnership(existing);
         }
-        AiExtractionRequest request = AiExtractionRequest
+        AiExtractionRequest aiRequest = AiExtractionRequest
                 .builder()
                 .userId(currentUserId)
-                .expenseId(expenseId)
-                .rawText(text)
-                .file(file)
+                .expenseId(providedExpenseId)
+                .rawText(request.getText())
+                .file(request.getFile())
                 .currency(currentUser.getDefaultCurrency())
                 .userLanguage(currentUser.getLanguage())
                 .categoriesMapping(currentUser.getCategoriesMapping())
                 .paymentMethods(currentUser.getPaymentMethods())
                 .build();
         
-        com.fasterxml.jackson.databind.JsonNode payload = aiExtractionPort.submitExpenseForExtraction(request);
-        return processAiExtractionResult(payload, currentUserId, expenseId);
+        com.fasterxml.jackson.databind.JsonNode payload = aiExtractionPort.submitExpenseForExtraction(aiRequest);
+        return processAiExtractionResult(payload, currentUserId, providedExpenseId);
     }
 
-    private ExpenseDTO processAiExtractionResult(com.fasterxml.jackson.databind.JsonNode payload, String currentUserId, String providedExpenseId) {
+    private List<ExpenseDTO> processAiExtractionResult(com.fasterxml.jackson.databind.JsonNode payload, String currentUserId, String providedExpenseId) {
         log.info("Received AI Extraction Result. Status: {}", payload.path("status").asText());
 
         String status = payload.path("status").asText("");
@@ -177,9 +190,11 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         if (!success) {
             log.error("AI Microservice reported extraction failure: {}", payload.path("error").asText());
             if (providedExpenseId != null && !providedExpenseId.isBlank()) {
-                expensePort.loadExpense(providedExpenseId).ifPresent(expense -> {
-                    expense.setStatus("FAILED_EXTRACTION");
-                    expensePort.saveExpense(expense);
+                transactionTemplate.executeWithoutResult(statusContext -> {
+                    expensePort.loadExpense(providedExpenseId).ifPresent(expense -> {
+                        expense.setStatus("FAILED_EXTRACTION");
+                        expensePort.saveExpense(expense);
+                    });
                 });
             }
             throw new RuntimeException("AI Extraction failed: " + payload.path("error").asText());
@@ -192,46 +207,59 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             throw new RuntimeException("AI extraction returned COMPLETED but no data was found");
         }
 
-        com.fasterxml.jackson.databind.JsonNode data = extractedList.get(0);
+        List<ExpenseDTO> dtoList = new java.util.ArrayList<>();
+        for (int i = 0; i < extractedList.size(); i++) {
+            com.fasterxml.jackson.databind.JsonNode data = extractedList.get(i);
+            ExpenseDTO dto = new ExpenseDTO();
+            dto.setAmount(data.path("amount").asDouble(0.0));
+            dto.setCategory(data.path("category").asText("Other"));
+            dto.setSubCategory(data.path("sub_category").asText(null));
 
-        ExpenseDTO dto = new ExpenseDTO();
-        dto.setAmount(data.path("amount").asDouble(0.0));
-        dto.setCategory(data.path("category").asText(null));
-        dto.setSubCategory(data.path("sub_category").asText(null));
+            String paymentMethod = data.path("payment_method").asText(null);
+            dto.setPaymentMode(paymentMethod);
 
-        String paymentMethod = data.path("payment_method").asText(null);
-        dto.setPaymentMode(paymentMethod);
+            String merchant = data.path("merchant").asText(null);
+            dto.setMerchantName(merchant);
 
-        String merchant = data.path("merchant").asText(null);
-        dto.setMerchantName(merchant);
+            boolean isDebit = data.path("is_debit").asBoolean(true);
+            dto.setTransactionType(isDebit ? "DEBIT" : "CREDIT");
 
-        boolean isDebit = data.path("is_debit").asBoolean(true);
-        dto.setTransactionType(isDebit ? "DEBIT" : "CREDIT");
-
-        if (data.path("date").isTextual() && !data.path("date").asText().isBlank()) {
-            try {
-                java.time.LocalDate ld = java.time.LocalDate.parse(data.path("date").asText());
-                dto.setExpenseDate(ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli());
-            } catch (Exception e) {
+            if (data.path("date").isTextual() && !data.path("date").asText().isBlank()) {
+                try {
+                    java.time.LocalDate ld = java.time.LocalDate.parse(data.path("date").asText());
+                    dto.setExpenseDate(ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli());
+                } catch (Exception e) {
+                    dto.setExpenseDate(System.currentTimeMillis());
+                }
+            } else if (data.path("date").isNumber()) {
+                dto.setExpenseDate(data.path("date").asLong(System.currentTimeMillis()));
+            } else {
                 dto.setExpenseDate(System.currentTimeMillis());
             }
-        } else if (data.path("date").isNumber()) {
-            dto.setExpenseDate(data.path("date").asLong(System.currentTimeMillis()));
-        } else {
-            dto.setExpenseDate(System.currentTimeMillis());
+
+            dto.setStatus("PROCESSED_BY_AI");
+            dto.setUserID(currentUserId);
+            
+            if (i == 0) {
+                String expenseId = payload.path("expenseId").asText(null);
+                if (expenseId == null || expenseId.isBlank()) {
+                    expenseId = providedExpenseId;
+                }
+                if (expenseId != null && expenseId.isBlank()) expenseId = null;
+                dto.setExpenseId(expenseId);
+            } else {
+                dto.setExpenseId(java.util.UUID.randomUUID().toString());
+            }
+            dtoList.add(dto);
         }
 
-        dto.setStatus("PROCESSED_BY_AI");
-        dto.setUserID(currentUserId);
-        
-        String expenseId = payload.path("expenseId").asText(null);
-        if (expenseId == null || expenseId.isBlank()) {
-            expenseId = providedExpenseId;
-        }
-        if (expenseId != null && expenseId.isBlank()) expenseId = null;
-        dto.setExpenseId(expenseId);
-
-        return saveExtractedExpense(dto, currentUserId);
+        return transactionTemplate.execute(statusContext -> {
+            List<ExpenseDTO> savedResults = new java.util.ArrayList<>();
+            for (ExpenseDTO dto : dtoList) {
+                savedResults.add(saveExtractedExpense(dto, currentUserId));
+            }
+            return savedResults;
+        });
     }
 
     private ExpenseDTO saveExtractedExpense(ExpenseDTO expenseDTO, String assignedUserId) {

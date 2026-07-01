@@ -1,6 +1,7 @@
 package com.holytrinity.expenso.expense.adapter.in.web;
 
 import com.holytrinity.expenso.expense.application.dto.ExpenseDTO;
+import com.holytrinity.expenso.expense.application.dto.ExpenseExtractionRequest;
 import com.holytrinity.expenso.expense.application.port.in.ExpenseUseCase;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
@@ -8,7 +9,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -65,11 +66,9 @@ public class ExpenseController {
 
     @PostMapping(value = "/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ApiResponse(responseCode = "200", description = "Extracted successfully")
-    public ResponseEntity<ExpenseDTO> extractExpense(
-            @RequestParam(value = "file", required = false) MultipartFile file,
-            @RequestParam(value = "text", required = false) String text,
-            @RequestParam(value = "expenseId", required = true) String expenseId) {
-        ExpenseDTO extractedExpense = expenseUseCase.submitForExtraction(file, text, expenseId);
-        return ResponseEntity.ok(extractedExpense);
+    public ResponseEntity<List<ExpenseDTO>> extractExpense(
+            @ModelAttribute @Valid final ExpenseExtractionRequest request) {
+        List<ExpenseDTO> extractedExpenses = expenseUseCase.submitForExtraction(request);
+        return ResponseEntity.ok(extractedExpenses);
     }
 }
