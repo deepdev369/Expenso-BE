@@ -15,6 +15,8 @@ import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.holytrinity.expenso.expense.application.port.in.ExpenseUseCase;
@@ -44,6 +46,8 @@ public class AiExtractionAdapter implements AiExtractionPort {
     @Autowired
     @Qualifier("applicationTaskExecutor")
     private TaskExecutor taskExecutor;
+
+    private final Semaphore extractionSemaphore = new Semaphore(10, true);
 
     @Override
     public com.fasterxml.jackson.databind.JsonNode submitExpenseForExtraction(AiExtractionRequest request) {
@@ -93,13 +97,35 @@ public class AiExtractionAdapter implements AiExtractionPort {
         log.info("Submitting expense extraction to AI synchronously for user {}", request.getUserId());
 
         try {
-            return restClient.post()
-                    .uri("/api/v1/expense/extract")
-                    .header("X-Internal-Token", internalToken)
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
-                    .body(body)
-                    .retrieve()
-                    .body(com.fasterxml.jackson.databind.JsonNode.class);
+            boolean acquired = extractionSemaphore.tryAcquire(60, TimeUnit.SECONDS);
+            if (!acquired) {
+                throw new RuntimeException("Server is currently busy processing other extractions. Please try again later.");
+            }
+            
+            try {
+                String responseBody = restClient.post()
+                        .uri("/api/v1/expense/extract")
+                        .header("X-Internal-Token", internalToken)
+                        .contentType(MediaType.MULTIPART_FORM_DATA)
+                        .body(body)
+                        .retrieve()
+                        .body(String.class);
+                com.fasterxml.jackson.databind.JsonNode initialResponse = objectMapper.readTree(responseBody);
+                
+                String status = initialResponse.path("data").path("status").asText("");
+                if ("FAILED".equals(status)) {
+                    log.error("AI Service failed the extraction: {}", initialResponse.path("data").path("error").asText(""));
+                } else if ("COMPLETED".equals(status)) {
+                    log.info("AI Service finished processing synchronously.");
+                }
+                
+                return initialResponse;
+            } finally {
+                extractionSemaphore.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrupted while waiting to process AI extraction", e);
         } catch (Exception e) {
             log.error("Failed to submit request to AI Service", e);
             throw new RuntimeException("HTTP request to AI service failed: " + e.getMessage(), e);

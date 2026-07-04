@@ -161,9 +161,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
 
         String providedExpenseId = request.getExpenseId();
         if (providedExpenseId != null && !providedExpenseId.trim().isEmpty()) {
-            Expense existing = expensePort.loadExpense(providedExpenseId)
-                    .orElseThrow(() -> new NotFoundException("Expense not found"));
-            checkOwnership(existing);
+            expensePort.loadExpense(providedExpenseId).ifPresent(this::checkOwnership);
         }
         AiExtractionRequest aiRequest = AiExtractionRequest
                 .builder()
