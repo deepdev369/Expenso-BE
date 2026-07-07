@@ -56,6 +56,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         log.info("Creating expense for user: {}", expenseDTO.getUserID());
         Expense expense = new Expense();
         mapToEntity(expenseDTO, expense);
+        expense.setVersion(null);
         Expense savedExpense = expensePort.saveExpense(expense);
         log.info("Expense created with ID: {}", savedExpense.getExpenseId());
         return mapToDTO(savedExpense);
@@ -210,6 +211,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             com.fasterxml.jackson.databind.JsonNode data = extractedList.get(i);
             ExpenseDTO dto = new ExpenseDTO();
             dto.setAmount(data.path("amount").asDouble(0.0));
+            dto.setTitle(data.path("title").asText("Untitled"));
             dto.setCategory(data.path("category").asText("Other"));
             dto.setSubCategory(data.path("sub_category").asText(null));
 
@@ -278,6 +280,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             expense.setExpenseId(expenseDTO.getExpenseId() != null ? expenseDTO.getExpenseId() : java.util.UUID.randomUUID().toString());
         }
 
+        expense.setTitle(expenseDTO.getTitle());
         expense.setAmount(expenseDTO.getAmount());
         expense.setCategory(expenseDTO.getCategory());
         expense.setSubCategory(expenseDTO.getSubCategory());
@@ -301,6 +304,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
     private ExpenseDTO mapToDTO(Expense expense) {
         ExpenseDTO expenseDTO = new ExpenseDTO();
         expenseDTO.setExpenseId(expense.getExpenseId());
+        expenseDTO.setTitle(expense.getTitle());
         expenseDTO.setAmount(expense.getAmount());
         expenseDTO.setCategory(expense.getCategory());
         expenseDTO.setSubCategory(expense.getSubCategory());
@@ -321,6 +325,7 @@ public class ExpenseApplicationService implements ExpenseUseCase {
 
     private void mapToEntity(ExpenseDTO expenseDTO, Expense expense) {
         expense.setExpenseId(expenseDTO.getExpenseId());
+        expense.setTitle(expenseDTO.getTitle());
         expense.setAmount(expenseDTO.getAmount());
         expense.setCategory(expenseDTO.getCategory());
         expense.setSubCategory(expenseDTO.getSubCategory());

@@ -1,16 +1,8 @@
 package com.holytrinity.expenso.split.domain;
 
+import com.holytrinity.expenso.user.domain.AssociatedUser;
 import com.holytrinity.expenso.user.domain.User;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.List;
 import lombok.Getter;
@@ -22,18 +14,19 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import org.hibernate.annotations.Filter;
 import org.hibernate.annotations.FilterDef;
 import org.hibernate.annotations.ParamDef;
+import org.hibernate.annotations.SQLRestriction;
 
 @Entity
 @Table(name = "splits")
 @EntityListeners(AuditingEntityListener.class)
-@org.hibernate.annotations.SQLRestriction("deleted = false")
+@SQLRestriction("deleted = false")
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "userId", type = String.class))
 @Filter(name = "tenantFilter", condition = "user_id = :userId")
 @Getter
 @Setter
 public class Split {
 
-    @jakarta.persistence.Version
+    @Version
     @Column(nullable = false)
     private Long version;
 
@@ -45,16 +38,32 @@ public class Split {
     private String splitId;
 
     @Column(nullable = false)
+    private String title;
+
+    @Column
     private String description;
 
     @Column(nullable = false)
     private Double totalAmount;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String splitMethod; // EQUAL, CUSTOM, PERCENTAGE
+    private SplitMethod splitMethod;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "paid_by_id", nullable = false)
+    private AssociatedUser paidBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "group_id")
+    private Group group;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SettlementStatus settlementStatus;
 
     @Column(nullable = false)
-    private Long splitDate;
+    private OffsetDateTime splitDate; // Changed from Long to OffsetDateTime per spec 'Date'
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -62,6 +71,9 @@ public class Split {
 
     @OneToMany(mappedBy = "split", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SplitMember> members;
+
+    @OneToMany(mappedBy = "split", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Attachment> attachments;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)

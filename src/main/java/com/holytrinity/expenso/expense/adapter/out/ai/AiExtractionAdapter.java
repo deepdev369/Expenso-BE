@@ -119,7 +119,7 @@ public class AiExtractionAdapter implements AiExtractionPort {
                     log.info("AI Service finished processing synchronously.");
                 }
                 
-                return initialResponse;
+                return initialResponse.path("data");
             } finally {
                 extractionSemaphore.release();
             }

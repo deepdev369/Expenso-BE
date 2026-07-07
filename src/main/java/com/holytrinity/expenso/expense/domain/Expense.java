@@ -45,6 +45,9 @@ public class Expense {
         private String expenseId;
 
         @Column(nullable = false)
+        private String title;
+
+        @Column(nullable = false)
         private Double amount;
 
         @Column(nullable = false)

@@ -1,6 +1,7 @@
 package com.holytrinity.expenso.split.adapter.in.web;
 
 import com.holytrinity.expenso.split.application.dto.SplitDTO;
+import com.holytrinity.expenso.split.application.dto.SplitExtractionRequest;
 import com.holytrinity.expenso.split.application.port.in.SplitUseCase;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -9,6 +10,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.http.MediaType;
 
 import java.util.List;
 
@@ -60,5 +63,12 @@ public class SplitController {
     public ResponseEntity<Void> deleteBulk(@RequestBody final List<String> splitIds) {
         splitUseCase.deleteBulk(splitIds);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<SplitDTO> extractSplit(
+            @ModelAttribute @jakarta.validation.Valid final SplitExtractionRequest request) {
+        SplitDTO extractedSplit = splitUseCase.submitForExtraction(request);
+        return ResponseEntity.ok(extractedSplit);
     }
 }
