@@ -46,7 +46,7 @@ public class UserDTO {
     @Size(max = 255)
     private String language;
 
-    private java.util.Map<String, java.util.List<String>> categoriesMapping;
+    private java.util.Map<String, Object> categoriesMapping;
 
     private java.util.List<String> paymentMethods;
 

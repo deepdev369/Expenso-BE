@@ -60,7 +60,7 @@ public class User {
 
         @Column(columnDefinition = "jsonb")
         @JdbcTypeCode(SqlTypes.JSON)
-        private java.util.Map<String, java.util.List<String>> categoriesMapping;
+        private java.util.Map<String, Object> categoriesMapping;
 
         @Column(columnDefinition = "jsonb")
         @JdbcTypeCode(SqlTypes.JSON)

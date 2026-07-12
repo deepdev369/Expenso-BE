@@ -172,12 +172,41 @@ public class ExpenseApplicationService implements ExpenseUseCase {
                 .file(request.getFile())
                 .currency(currentUser.getDefaultCurrency())
                 .userLanguage(currentUser.getLanguage())
-                .categoriesMapping(currentUser.getCategoriesMapping())
+                .categoriesMapping(cleanCategoriesMapping(currentUser.getCategoriesMapping()))
                 .paymentMethods(currentUser.getPaymentMethods())
                 .build();
         
         com.fasterxml.jackson.databind.JsonNode payload = aiExtractionPort.submitExpenseForExtraction(aiRequest);
         return processAiExtractionResult(payload, currentUserId, providedExpenseId);
+    }
+
+    private java.util.Map<String, List<String>> cleanCategoriesMapping(java.util.Map<String, Object> rawMapping) {
+        if (rawMapping == null) {
+            return null;
+        }
+        java.util.Map<String, List<String>> cleanMap = new java.util.HashMap<>();
+        for (java.util.Map.Entry<String, Object> entry : rawMapping.entrySet()) {
+            String categoryName = entry.getKey();
+            Object value = entry.getValue();
+            if (value instanceof java.util.Map) {
+                java.util.Map<?, ?> categoryDetails = (java.util.Map<?, ?>) value;
+                Object subCatsObj = categoryDetails.get("subCategories");
+                if (subCatsObj instanceof List) {
+                    List<?> subList = (List<?>) subCatsObj;
+                    List<String> subCategoryStrings = subList.stream()
+                            .map(Object::toString)
+                            .toList();
+                    cleanMap.put(categoryName, subCategoryStrings);
+                }
+            } else if (value instanceof List) {
+                List<?> list = (List<?>) value;
+                List<String> stringList = list.stream()
+                        .map(Object::toString)
+                        .toList();
+                cleanMap.put(categoryName, stringList);
+            }
+        }
+        return cleanMap;
     }
 
     private List<ExpenseDTO> processAiExtractionResult(com.fasterxml.jackson.databind.JsonNode payload, String currentUserId, String providedExpenseId) {
@@ -211,23 +240,37 @@ public class ExpenseApplicationService implements ExpenseUseCase {
             com.fasterxml.jackson.databind.JsonNode data = extractedList.get(i);
             ExpenseDTO dto = new ExpenseDTO();
             dto.setAmount(data.path("amount").asDouble(0.0));
-            dto.setTitle(data.path("title").asText("Untitled"));
-            dto.setCategory(data.path("category").asText("Other"));
-            dto.setSubCategory(data.path("sub_category").asText(null));
+            
+            String title = getNullableText(data.path("title"));
+            dto.setTitle(title != null ? title : "Untitled");
 
-            String paymentMethod = data.path("payment_method").asText(null);
-            dto.setPaymentMode(paymentMethod);
+            String category = getNullableText(data.path("category"));
+            dto.setCategory(category != null ? category : "Other");
 
-            String merchant = data.path("merchant").asText(null);
-            dto.setMerchantName(merchant);
+            dto.setSubCategory(getNullableText(data.path("sub_category")));
+
+            dto.setPaymentMode(getNullableText(data.path("payment_method")));
+
+            dto.setMerchantName(getNullableText(data.path("merchant")));
 
             boolean isDebit = data.path("is_debit").asBoolean(true);
             dto.setTransactionType(isDebit ? "DEBIT" : "CREDIT");
 
             if (data.path("date").isTextual() && !data.path("date").asText().isBlank()) {
+                String dateStr = data.path("date").asText();
                 try {
-                    java.time.LocalDate ld = java.time.LocalDate.parse(data.path("date").asText());
-                    dto.setExpenseDate(ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli());
+                    if (dateStr.contains("T")) {
+                        try {
+                            java.time.OffsetDateTime odt = java.time.OffsetDateTime.parse(dateStr);
+                            dto.setExpenseDate(odt.toInstant().toEpochMilli());
+                        } catch (Exception ex) {
+                            java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(dateStr);
+                            dto.setExpenseDate(ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli());
+                        }
+                    } else {
+                        java.time.LocalDate ld = java.time.LocalDate.parse(dateStr);
+                        dto.setExpenseDate(ld.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli());
+                    }
                 } catch (Exception e) {
                     dto.setExpenseDate(System.currentTimeMillis());
                 }
@@ -354,5 +397,16 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         if (!expense.getUser().getUserId().equals(currentUserId)) {
             throw new NotFoundException("Expense not found"); // Standard security practice to return 404
         }
+    }
+
+    private String getNullableText(com.fasterxml.jackson.databind.JsonNode node) {
+        if (node == null || node.isNull() || node.isMissingNode()) {
+            return null;
+        }
+        String text = node.asText();
+        if ("null".equalsIgnoreCase(text.trim())) {
+            return null;
+        }
+        return text;
     }
 }
