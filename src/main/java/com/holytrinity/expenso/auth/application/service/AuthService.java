@@ -43,6 +43,7 @@ import com.holytrinity.expenso.auth.application.port.out.EmailProviderPort;
 import com.holytrinity.expenso.auth.application.port.in.AuthUseCase;
 import org.springframework.security.core.Authentication;
 import com.holytrinity.expenso.security.SecurityUser;
+import com.holytrinity.expenso.shared.exception.UnauthorizedException;
 
 @Service
 @RequiredArgsConstructor
@@ -226,17 +227,17 @@ public class AuthService implements AuthUseCase {
         cleanExpiredOtps();
         String hashedToken = hashToken(request.getRefreshToken());
         RefreshToken storedToken = refreshTokenRepository.findByTokenHash(hashedToken)
-                .orElseThrow(() -> new RuntimeException("Invalid refresh token"));
+                .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
 
         if (storedToken.isRevoked() || storedToken.isExpired()) {
-            throw new RuntimeException("Refresh token is expired or revoked");
+            throw new UnauthorizedException("Refresh token is expired or revoked");
         }
 
         storedToken.setRevoked(true);
         refreshTokenRepository.save(storedToken);
 
         User user = userRepository.findById(storedToken.getUserId())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new UnauthorizedException("User not found"));
 
         return buildAuthResponse(new SecurityUser(user), user.getUserId(), false);
     }
