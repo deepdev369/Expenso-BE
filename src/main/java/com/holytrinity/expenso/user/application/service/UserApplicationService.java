@@ -151,8 +151,12 @@ public class UserApplicationService implements UserUseCase {
         }
         user.setDefaultCurrency(userDTO.getDefaultCurrency());
         user.setLanguage(userDTO.getLanguage());
-        user.setCategoriesMapping(userDTO.getCategoriesMapping());
-        user.setPaymentMethods(userDTO.getPaymentMethods());
+        if (userDTO.getCategoriesMapping() != null) {
+            user.setCategoriesMapping(userDTO.getCategoriesMapping());
+        }
+        if (userDTO.getPaymentMethods() != null) {
+            user.setPaymentMethods(userDTO.getPaymentMethods());
+        }
         user.setSmsConsentGranted(userDTO.getSmsConsentGranted());
         user.setVoiceConsentGranted(userDTO.getVoiceConsentGranted());
         user.setConsentGrantedAt(userDTO.getConsentGrantedAt());

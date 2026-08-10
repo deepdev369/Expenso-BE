@@ -188,23 +188,31 @@ public class ExpenseApplicationService implements ExpenseUseCase {
         for (java.util.Map.Entry<String, Object> entry : rawMapping.entrySet()) {
             String categoryName = entry.getKey();
             Object value = entry.getValue();
+            List<String> subCategoryStrings = new java.util.ArrayList<>();
+
             if (value instanceof java.util.Map) {
                 java.util.Map<?, ?> categoryDetails = (java.util.Map<?, ?>) value;
                 Object subCatsObj = categoryDetails.get("subCategories");
+                if (subCatsObj == null) {
+                    subCatsObj = categoryDetails.get("sub_categories");
+                }
+                if (subCatsObj == null) {
+                    subCatsObj = categoryDetails.get("subcategories");
+                }
                 if (subCatsObj instanceof List) {
                     List<?> subList = (List<?>) subCatsObj;
-                    List<String> subCategoryStrings = subList.stream()
+                    subCategoryStrings = subList.stream()
                             .map(Object::toString)
                             .toList();
-                    cleanMap.put(categoryName, subCategoryStrings);
                 }
             } else if (value instanceof List) {
                 List<?> list = (List<?>) value;
-                List<String> stringList = list.stream()
+                subCategoryStrings = list.stream()
                         .map(Object::toString)
                         .toList();
-                cleanMap.put(categoryName, stringList);
             }
+
+            cleanMap.put(categoryName, subCategoryStrings);
         }
         return cleanMap;
     }

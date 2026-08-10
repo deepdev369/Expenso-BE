@@ -37,11 +37,14 @@ public @interface UserEmailUnique {
 
         private final UserPort userPort;
         private final HttpServletRequest request;
+        private final com.holytrinity.expenso.security.UserContext userContext;
 
         public UserEmailUniqueValidator(final UserPort userPort,
-                final HttpServletRequest request) {
+                final HttpServletRequest request,
+                final com.holytrinity.expenso.security.UserContext userContext) {
             this.userPort = userPort;
             this.request = request;
+            this.userContext = userContext;
         }
 
         @Override
@@ -53,7 +56,10 @@ public @interface UserEmailUnique {
             @SuppressWarnings("unchecked")
             final Map<String, String> pathVariables = ((Map<String, String>) request
                     .getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE));
-            final String currentId = pathVariables.get("userId");
+            String currentId = pathVariables != null ? pathVariables.get("userId") : null;
+            if (currentId == null && userContext != null) {
+                currentId = userContext.getCurrentUserIdOrNull();
+            }
             if (currentId != null) {
                 String currentEmail = userPort.loadUser(currentId)
                         .map(User::getEmail)
